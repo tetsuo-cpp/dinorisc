@@ -46,7 +46,8 @@ private:
   int32_t signExtend(uint32_t value, int bits) const;
 
   // High-level decoding logic
-  RV64IInstruction::Opcode determineOpcode(const DecodedFields &fields) const;
+  RV64IInstruction::Opcode determineOpcode(const DecodedFields &fields,
+                                           uint32_t raw) const;
   std::vector<RV64IInstruction::Operand>
   extractOperands(const DecodedFields &fields, RV64IInstruction::Opcode opcode,
                   uint32_t raw) const;

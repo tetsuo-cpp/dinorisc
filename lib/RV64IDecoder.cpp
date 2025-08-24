@@ -15,7 +15,7 @@ RV64IInstruction RV64IDecoder::decode(uint32_t rawInstruction,
   DecodedFields fields = extractFields(rawInstruction);
 
   // Determine the specific opcode
-  RV64IInstruction::Opcode opcode = determineOpcode(fields);
+  RV64IInstruction::Opcode opcode = determineOpcode(fields, rawInstruction);
 
   if (opcode == RV64IInstruction::Opcode::INVALID) {
     invalidCount++;
@@ -92,7 +92,7 @@ int32_t RV64IDecoder::signExtend(uint32_t value, int bits) const {
 }
 
 RV64IInstruction::Opcode
-RV64IDecoder::determineOpcode(const DecodedFields &fields) const {
+RV64IDecoder::determineOpcode(const DecodedFields &fields, uint32_t raw) const {
   switch (fields.opcode) {
   case 0x33: // OP
     switch (fields.funct3) {
@@ -228,13 +228,14 @@ RV64IDecoder::determineOpcode(const DecodedFields &fields) const {
     return RV64IInstruction::Opcode::AUIPC;
 
   case 0x73: // SYSTEM
-    if (fields.funct3 == 0x0) {
-      if (fields.rs2 == 0x0 && fields.rd == 0x0) {
-        if (fields.rs1 == 0x0)
-          return RV64IInstruction::Opcode::ECALL;
-        if (fields.rs1 == 0x1)
-          return RV64IInstruction::Opcode::EBREAK;
-      }
+    if (fields.funct3 == 0x0 && fields.rd == 0x0 && fields.rs1 == 0x0) {
+      // For ECALL and EBREAK, check the immediate field (bits 31-20)
+      // Don't check rs2 since it's part of the immediate
+      uint32_t imm = (raw >> 20) & 0xFFF;
+      if (imm == 0x0)
+        return RV64IInstruction::Opcode::ECALL;
+      if (imm == 0x1)
+        return RV64IInstruction::Opcode::EBREAK;
     }
     break;
   }

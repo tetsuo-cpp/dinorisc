@@ -16,6 +16,13 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Add third-party dependencies
 include_directories(${CMAKE_SOURCE_DIR}/third_party/elfio)
 
+# Testing support
+option(DINORISC_ENABLE_TESTING "Enable testing" ON)
+if(DINORISC_ENABLE_TESTING)
+  enable_testing()
+  add_subdirectory(third_party/catch2)
+endif()
+
 # Find clang-format
 find_program(CLANG_FORMAT_EXECUTABLE NAMES clang-format)
 
@@ -26,6 +33,8 @@ if(CLANG_FORMAT_EXECUTABLE)
     ${CMAKE_SOURCE_DIR}/lib/*.h
     ${CMAKE_SOURCE_DIR}/tools/*.cpp
     ${CMAKE_SOURCE_DIR}/tools/*.h
+    ${CMAKE_SOURCE_DIR}/tests/*.cpp
+    ${CMAKE_SOURCE_DIR}/tests/*.h
   )
 
   add_custom_target(format
@@ -37,3 +46,8 @@ endif()
 # Add subdirectories
 add_subdirectory(lib)
 add_subdirectory(tools)
+
+# Add tests if enabled
+if(DINORISC_ENABLE_TESTING)
+  add_subdirectory(tests)
+endif()

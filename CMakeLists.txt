@@ -13,6 +13,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# Add third-party dependencies
+include_directories(${CMAKE_SOURCE_DIR}/third_party/elfio)
+
 # Find clang-format
 find_program(CLANG_FORMAT_EXECUTABLE NAMES clang-format)
 

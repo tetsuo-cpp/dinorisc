@@ -1,7 +1,12 @@
 #pragma once
 
+#include "ELFReader.h"
+#include "RV64IDecoder.h"
+#include "RV64IInstruction.h"
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace dinorisc {
 
@@ -10,12 +15,19 @@ public:
   BinaryTranslator();
   ~BinaryTranslator();
 
-  bool translateBinary(const std::string &inputPath,
-                       const std::string &outputPath);
+  bool executeProgram(const std::string &inputPath);
 
 private:
+  std::unique_ptr<ELFReader> elfReader;
+  std::unique_ptr<RV64IDecoder> decoder;
+
   void initializeTranslator();
-  bool translateRISCVToARM64(const uint8_t *data, size_t size);
+  bool loadAndDecodeRISCV(const std::string &inputPath);
+  bool executeWithDBT(const std::vector<RV64IInstruction> &instructions);
+
+  // Current translation state
+  std::vector<RV64IInstruction> instructions;
+  uint64_t entryPoint;
 };
 
 } // namespace dinorisc

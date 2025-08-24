@@ -23,25 +23,28 @@ if(DINORISC_ENABLE_TESTING)
   add_subdirectory(third_party/catch2)
 endif()
 
-# Find clang-format
-find_program(CLANG_FORMAT_EXECUTABLE NAMES clang-format)
+# Add format target for C++ and Python files
+file(GLOB_RECURSE ALL_SOURCE_FILES
+  ${CMAKE_SOURCE_DIR}/lib/*.cpp
+  ${CMAKE_SOURCE_DIR}/lib/*.h
+  ${CMAKE_SOURCE_DIR}/tools/*.cpp
+  ${CMAKE_SOURCE_DIR}/tools/*.h
+  ${CMAKE_SOURCE_DIR}/tests/*.cpp
+  ${CMAKE_SOURCE_DIR}/tests/*.h
+  ${CMAKE_SOURCE_DIR}/tests/e2e/samples/*.c
+  ${CMAKE_SOURCE_DIR}/tests/e2e/samples/*.h
+)
 
-# Add format target if clang-format is found
-if(CLANG_FORMAT_EXECUTABLE)
-  file(GLOB_RECURSE ALL_SOURCE_FILES
-    ${CMAKE_SOURCE_DIR}/lib/*.cpp
-    ${CMAKE_SOURCE_DIR}/lib/*.h
-    ${CMAKE_SOURCE_DIR}/tools/*.cpp
-    ${CMAKE_SOURCE_DIR}/tools/*.h
-    ${CMAKE_SOURCE_DIR}/tests/*.cpp
-    ${CMAKE_SOURCE_DIR}/tests/*.h
-  )
+file(GLOB_RECURSE ALL_PYTHON_FILES
+  ${CMAKE_SOURCE_DIR}/tests/*.py
+  ${CMAKE_SOURCE_DIR}/tools/*.py
+)
 
-  add_custom_target(format
-    COMMAND ${CLANG_FORMAT_EXECUTABLE} -i ${ALL_SOURCE_FILES}
-    COMMENT "Running clang-format on all source files"
-  )
-endif()
+add_custom_target(format
+  COMMAND clang-format -i ${ALL_SOURCE_FILES}
+  COMMAND black ${ALL_PYTHON_FILES}
+  COMMENT "Running clang-format and black on source files"
+)
 
 # Add subdirectories
 add_subdirectory(lib)

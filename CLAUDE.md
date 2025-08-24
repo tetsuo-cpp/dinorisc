@@ -15,7 +15,9 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
   - `RV64IInstruction`: Represents decoded RISC-V instructions with all formats
 - **tools/dinorisc/**: Command-line executable that executes RISC-V binaries
 - **third_party/**: External dependencies (ELFIO library, Catch2 testing framework)
-- **tests/**: Unit and integration tests
+- **tests/**: Unit and end-to-end tests
+  - `unit/`: Unit tests using Catch2 framework  
+  - `e2e/`: End-to-end tests using pytest, includes RISC-V C sample programs
 - **build/**: Build artifacts (created by CMake/Ninja)
 
 ## Development Commands
@@ -29,14 +31,19 @@ ninja
 
 ### Code Formatting
 ```bash
-ninja format  # Runs clang-format on all source files
+ninja format  # Runs clang-format on C++ files and black on Python files
 ```
 
 ### Testing
 ```bash
 ninja && ctest --output-on-failure  # Run all tests
 ./bin/RV64IDecoderTest              # Run specific unit test
+ninja test-e2e                      # Run end-to-end tests only
 ```
+
+**Note**: E2E tests require:
+- `clang` with RISC-V target support in PATH
+- `pytest` installed in the active Python environment
 
 ### Running
 ```bash
@@ -60,6 +67,7 @@ ninja && ctest --output-on-failure  # Run all tests
 - Compiler flags: `-Wall -Wextra -Wno-unused-parameter`
 - Build outputs go to `build/bin/` and `build/lib/`
 - Testing enabled by default with `DINORISC_ENABLE_TESTING=ON`
+- Python dependencies for e2e tests: `pytest`, `black` (see `tests/e2e/requirements.txt`)
 
 ## Git Commit Guidelines
 

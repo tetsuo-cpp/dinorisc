@@ -1,5 +1,5 @@
-[submodule "third_party/elfio"]
-	path = third_party/elfio
+[submodule "third_party/ELFIO"]
+	path = third_party/ELFIO
 	url = https://github.com/serge1/ELFIO.git
 [submodule "third_party/Catch2"]
 	path = third_party/Catch2

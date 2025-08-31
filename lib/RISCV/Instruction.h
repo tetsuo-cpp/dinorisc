@@ -5,8 +5,9 @@
 #include <vector>
 
 namespace dinorisc {
+namespace riscv {
 
-class RV64IInstruction {
+class Instruction {
 public:
   enum class Opcode {
     // Arithmetic and Logic Instructions
@@ -99,10 +100,9 @@ public:
   uint64_t address;
 
   // Constructors
-  RV64IInstruction() : opcode(Opcode::INVALID), rawInstruction(0), address(0) {}
+  Instruction() : opcode(Opcode::INVALID), rawInstruction(0), address(0) {}
 
-  RV64IInstruction(Opcode op, std::vector<Operand> ops, uint32_t raw,
-                   uint64_t addr)
+  Instruction(Opcode op, std::vector<Operand> ops, uint32_t raw, uint64_t addr)
       : opcode(op), operands(std::move(ops)), rawInstruction(raw),
         address(addr) {}
 
@@ -134,4 +134,5 @@ private:
   static std::string operandToString(const Operand &op);
 };
 
+} // namespace riscv
 } // namespace dinorisc

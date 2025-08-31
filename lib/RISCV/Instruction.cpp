@@ -1,10 +1,11 @@
-#include "RV64IInstruction.h"
+#include "Instruction.h"
 #include <iomanip>
 #include <sstream>
 
 namespace dinorisc {
+namespace riscv {
 
-std::string RV64IInstruction::toString() const {
+std::string Instruction::toString() const {
   std::stringstream ss;
   ss << "RV64I[0x" << std::hex << std::setfill('0') << std::setw(8)
      << rawInstruction << " @ 0x" << address << "] ";
@@ -28,7 +29,7 @@ std::string RV64IInstruction::toString() const {
   return ss.str();
 }
 
-std::string RV64IInstruction::opcodeToString(Opcode op) {
+std::string Instruction::opcodeToString(Opcode op) {
   switch (op) {
   case Opcode::ADD:
     return "ADD";
@@ -138,7 +139,7 @@ std::string RV64IInstruction::opcodeToString(Opcode op) {
   return "UNKNOWN";
 }
 
-std::string RV64IInstruction::operandToString(const Operand &op) {
+std::string Instruction::operandToString(const Operand &op) {
   std::stringstream ss;
   switch (op.type) {
   case OperandType::REGISTER:
@@ -154,4 +155,5 @@ std::string RV64IInstruction::operandToString(const Operand &op) {
   return ss.str();
 }
 
+} // namespace riscv
 } // namespace dinorisc

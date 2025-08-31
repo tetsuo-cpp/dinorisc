@@ -30,7 +30,7 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
   for (size_t i = 0; i < numInstructions; ++i) {
     uint64_t pc = textBaseAddress + (i * 4);
     uint32_t rawInst = decoder->readInstruction(textSectionData.data(), i * 4);
-    RV64IInstruction inst = decoder->decode(rawInst, pc);
+    riscv::Instruction inst = decoder->decode(rawInst, pc);
     std::cout << "[" << i << "] " << inst.toString() << std::endl;
   }
 
@@ -44,7 +44,7 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
 
 void BinaryTranslator::initializeTranslator() {
   elfReader = std::make_unique<ELFReader>();
-  decoder = std::make_unique<RV64IDecoder>();
+  decoder = std::make_unique<riscv::Decoder>();
 }
 
 bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
@@ -92,7 +92,7 @@ bool BinaryTranslator::executeWithDBT() {
   // while (executing) {
   //   size_t offset = (currentPC - textBaseAddress);
   //   uint32_t rawInst = decoder->readInstruction(textSectionData.data(),
-  //   offset); RV64IInstruction inst = decoder->decode(rawInst, currentPC);
+  //   offset); riscv::Instruction inst = decoder->decode(rawInst, currentPC);
   //   // Translate and execute instruction...
   // }
 

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ELFReader.h"
-#include "RV64IDecoder.h"
-#include "RV64IInstruction.h"
+#include "RISCV/Decoder.h"
+#include "RISCV/Instruction.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -19,7 +19,7 @@ public:
 
 private:
   std::unique_ptr<ELFReader> elfReader;
-  std::unique_ptr<RV64IDecoder> decoder;
+  std::unique_ptr<riscv::Decoder> decoder;
 
   void initializeTranslator();
   bool loadRISCVBinary(const std::string &inputPath);

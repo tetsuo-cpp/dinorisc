@@ -18,12 +18,15 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADD);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].type == Instruction::OperandType::REGISTER);
-    REQUIRE(inst.operands[0].reg == 1); // rd = x1
-    REQUIRE(inst.operands[1].type == Instruction::OperandType::REGISTER);
-    REQUIRE(inst.operands[1].reg == 2); // rs1 = x2
-    REQUIRE(inst.operands[2].type == Instruction::OperandType::REGISTER);
-    REQUIRE(inst.operands[2].reg == 3); // rs2 = x3
+    REQUIRE(std::holds_alternative<Instruction::Register>(inst.operands[0]));
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rd = x1
+    REQUIRE(std::holds_alternative<Instruction::Register>(inst.operands[1]));
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            2); // rs1 = x2
+    REQUIRE(std::holds_alternative<Instruction::Register>(inst.operands[2]));
+    REQUIRE(std::get<Instruction::Register>(inst.operands[2]).value ==
+            3); // rs2 = x3
     REQUIRE(inst.rawInstruction == raw);
     REQUIRE(inst.address == pc);
   }
@@ -37,9 +40,12 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::SUB);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 5); // rd = x5
-    REQUIRE(inst.operands[1].reg == 6); // rs1 = x6
-    REQUIRE(inst.operands[2].reg == 7); // rs2 = x7
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            5); // rd = x5
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            6); // rs1 = x6
+    REQUIRE(std::get<Instruction::Register>(inst.operands[2]).value ==
+            7); // rs2 = x7
   }
 
   SECTION("AND instruction") {
@@ -50,9 +56,12 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::AND);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 10); // rd = x10
-    REQUIRE(inst.operands[1].reg == 11); // rs1 = x11
-    REQUIRE(inst.operands[2].reg == 12); // rs2 = x12
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            10); // rd = x10
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            11); // rs1 = x11
+    REQUIRE(std::get<Instruction::Register>(inst.operands[2]).value ==
+            12); // rs2 = x12
   }
 
   SECTION("XOR instruction") {
@@ -62,9 +71,9 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::XOR);
-    REQUIRE(inst.operands[0].reg == 1);
-    REQUIRE(inst.operands[1].reg == 2);
-    REQUIRE(inst.operands[2].reg == 3);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 1);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 2);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[2]).value == 3);
   }
 }
 
@@ -79,10 +88,13 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDI);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 1); // rd = x1
-    REQUIRE(inst.operands[1].reg == 2); // rs1 = x2
-    REQUIRE(inst.operands[2].type == Instruction::OperandType::IMMEDIATE);
-    REQUIRE(inst.operands[2].imm == 100); // immediate = 100
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rd = x1
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            2); // rs1 = x2
+    REQUIRE(std::holds_alternative<Instruction::Immediate>(inst.operands[2]));
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            100); // immediate = 100
   }
 
   SECTION("ADDI instruction with negative immediate") {
@@ -92,9 +104,12 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDI);
-    REQUIRE(inst.operands[0].reg == 3);  // rd = x3
-    REQUIRE(inst.operands[1].reg == 4);  // rs1 = x4
-    REQUIRE(inst.operands[2].imm == -1); // immediate = -1 (sign extended)
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            3); // rd = x3
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            4); // rs1 = x4
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            -1); // immediate = -1 (sign extended)
   }
 
   SECTION("ANDI instruction") {
@@ -104,9 +119,9 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ANDI);
-    REQUIRE(inst.operands[0].reg == 5);
-    REQUIRE(inst.operands[1].reg == 6);
-    REQUIRE(inst.operands[2].imm == 255);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 6);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 255);
   }
 
   SECTION("SLLI instruction") {
@@ -116,9 +131,9 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::SLLI);
-    REQUIRE(inst.operands[0].reg == 1);
-    REQUIRE(inst.operands[1].reg == 2);
-    REQUIRE(inst.operands[2].imm == 5);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 1);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 2);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 5);
   }
 }
 
@@ -133,9 +148,12 @@ TEST_CASE("RV64IDecoder Load Instructions", "[decoder][load]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::LW);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 1); // rd = x1
-    REQUIRE(inst.operands[1].reg == 2); // rs1 = x2 (base)
-    REQUIRE(inst.operands[2].imm == 8); // offset = 8
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rd = x1
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            2); // rs1 = x2 (base)
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            8); // offset = 8
   }
 
   SECTION("LD instruction") {
@@ -145,9 +163,9 @@ TEST_CASE("RV64IDecoder Load Instructions", "[decoder][load]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::LD);
-    REQUIRE(inst.operands[0].reg == 5);
-    REQUIRE(inst.operands[1].reg == 10);
-    REQUIRE(inst.operands[2].imm == -16);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 10);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -16);
   }
 
   SECTION("LBU instruction") {
@@ -157,9 +175,9 @@ TEST_CASE("RV64IDecoder Load Instructions", "[decoder][load]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::LBU);
-    REQUIRE(inst.operands[0].reg == 3);
-    REQUIRE(inst.operands[1].reg == 8);
-    REQUIRE(inst.operands[2].imm == 4);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 3);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 8);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 4);
   }
 }
 
@@ -174,9 +192,12 @@ TEST_CASE("RV64IDecoder Store Instructions", "[decoder][store]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::SW);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 2);  // rs1 = x2 (base)
-    REQUIRE(inst.operands[1].reg == 3);  // rs2 = x3 (source)
-    REQUIRE(inst.operands[2].imm == 12); // offset = 12
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            2); // rs1 = x2 (base)
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            3); // rs2 = x3 (source)
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            12); // offset = 12
   }
 
   SECTION("SD instruction with negative offset") {
@@ -186,9 +207,12 @@ TEST_CASE("RV64IDecoder Store Instructions", "[decoder][store]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::SD);
-    REQUIRE(inst.operands[0].reg == 10); // rs1 = x10 (base)
-    REQUIRE(inst.operands[1].reg == 5);  // rs2 = x5 (source)
-    REQUIRE(inst.operands[2].imm == -8); // offset = -8
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            10); // rs1 = x10 (base)
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            5); // rs2 = x5 (source)
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            -8); // offset = -8
   }
 }
 
@@ -203,9 +227,12 @@ TEST_CASE("RV64IDecoder Branch Instructions", "[decoder][branch]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::BEQ);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 1);  // rs1 = x1
-    REQUIRE(inst.operands[1].reg == 2);  // rs2 = x2
-    REQUIRE(inst.operands[2].imm == 16); // offset = 16
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rs1 = x1
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            2); // rs2 = x2
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            16); // offset = 16
   }
 
   SECTION("BNE instruction with negative offset") {
@@ -215,9 +242,12 @@ TEST_CASE("RV64IDecoder Branch Instructions", "[decoder][branch]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::BNE);
-    REQUIRE(inst.operands[0].reg == 3);  // rs1 = x3
-    REQUIRE(inst.operands[1].reg == 4);  // rs2 = x4
-    REQUIRE(inst.operands[2].imm == -4); // offset = -4
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            3); // rs1 = x3
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            4); // rs2 = x4
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            -4); // offset = -4
   }
 
   SECTION("BLT instruction") {
@@ -227,9 +257,9 @@ TEST_CASE("RV64IDecoder Branch Instructions", "[decoder][branch]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::BLT);
-    REQUIRE(inst.operands[0].reg == 5);
-    REQUIRE(inst.operands[1].reg == 6);
-    REQUIRE(inst.operands[2].imm == 8);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 6);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 8);
   }
 }
 
@@ -244,8 +274,10 @@ TEST_CASE("RV64IDecoder Jump Instructions", "[decoder][jump]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::JAL);
     REQUIRE(inst.operands.size() == 2);
-    REQUIRE(inst.operands[0].reg == 1);   // rd = x1
-    REQUIRE(inst.operands[1].imm == 100); // offset = 100
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rd = x1
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[1]).value ==
+            100); // offset = 100
   }
 
   SECTION("JALR instruction") {
@@ -256,9 +288,12 @@ TEST_CASE("RV64IDecoder Jump Instructions", "[decoder][jump]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::JALR);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 1); // rd = x1
-    REQUIRE(inst.operands[1].reg == 2); // rs1 = x2
-    REQUIRE(inst.operands[2].imm == 4); // offset = 4
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rd = x1
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            2); // rs1 = x2
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value ==
+            4); // offset = 4
   }
 }
 
@@ -273,8 +308,9 @@ TEST_CASE("RV64IDecoder Upper Immediate Instructions", "[decoder][upper]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::LUI);
     REQUIRE(inst.operands.size() == 2);
-    REQUIRE(inst.operands[0].reg == 1); // rd = x1
-    REQUIRE(inst.operands[1].imm ==
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            1); // rd = x1
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[1]).value ==
             0x12345000); // immediate shifted to upper 20 bits
   }
 
@@ -285,8 +321,9 @@ TEST_CASE("RV64IDecoder Upper Immediate Instructions", "[decoder][upper]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::AUIPC);
-    REQUIRE(inst.operands[0].reg == 2);
-    REQUIRE(inst.operands[1].imm == 0x1000000);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 2);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[1]).value ==
+            0x1000000);
   }
 }
 
@@ -325,9 +362,9 @@ TEST_CASE("RV64IDecoder 64-bit Word Instructions", "[decoder][64bit]") {
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDW);
     REQUIRE(inst.operands.size() == 3);
-    REQUIRE(inst.operands[0].reg == 1);
-    REQUIRE(inst.operands[1].reg == 2);
-    REQUIRE(inst.operands[2].reg == 3);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 1);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 2);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[2]).value == 3);
   }
 
   SECTION("ADDIW instruction") {
@@ -337,9 +374,9 @@ TEST_CASE("RV64IDecoder 64-bit Word Instructions", "[decoder][64bit]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDIW);
-    REQUIRE(inst.operands[0].reg == 5);
-    REQUIRE(inst.operands[1].reg == 6);
-    REQUIRE(inst.operands[2].imm == 10);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 6);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 10);
   }
 }
 
@@ -404,7 +441,7 @@ TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {
 
     auto inst = decoder.decode(raw, 0);
 
-    REQUIRE(inst.operands[2].imm == -1);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -1);
   }
 
   SECTION("B-Type negative offset") {
@@ -413,7 +450,7 @@ TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {
 
     auto inst = decoder.decode(raw, 0);
 
-    REQUIRE(inst.operands[2].imm == -4);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -4);
   }
 
   SECTION("J-Type negative offset") {
@@ -422,7 +459,7 @@ TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {
 
     auto inst = decoder.decode(raw, 0);
 
-    REQUIRE(inst.operands[1].imm == -8);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[1]).value == -8);
   }
 }
 
@@ -435,7 +472,7 @@ TEST_CASE("RV64IDecoder Edge Cases", "[decoder][edge]") {
 
     auto inst = decoder.decode(raw, 0);
 
-    REQUIRE(inst.operands[2].imm == 2047);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 2047);
   }
 
   SECTION("Minimum negative I-Type immediate") {
@@ -444,7 +481,7 @@ TEST_CASE("RV64IDecoder Edge Cases", "[decoder][edge]") {
 
     auto inst = decoder.decode(raw, 0);
 
-    REQUIRE(inst.operands[2].imm == -2048);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -2048);
   }
 
   SECTION("Register x31 (highest register)") {
@@ -453,8 +490,11 @@ TEST_CASE("RV64IDecoder Edge Cases", "[decoder][edge]") {
 
     auto inst = decoder.decode(raw, 0);
 
-    REQUIRE(inst.operands[0].reg == 31); // rd = x31
-    REQUIRE(inst.operands[1].reg == 30); // rs1 = x30
-    REQUIRE(inst.operands[2].reg == 29); // rs2 = x29
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
+            31); // rd = x31
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value ==
+            30); // rs1 = x30
+    REQUIRE(std::get<Instruction::Register>(inst.operands[2]).value ==
+            29); // rs2 = x29
   }
 }

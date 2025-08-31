@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace dinorisc {
@@ -79,19 +80,19 @@ public:
     INVALID
   };
 
-  enum class OperandType { REGISTER, IMMEDIATE, NONE };
-
-  struct Operand {
-    OperandType type;
-    union {
-      uint32_t reg;
-      int64_t imm;
-    };
-
-    Operand() : type(OperandType::NONE), reg(0) {}
-    explicit Operand(uint32_t r) : type(OperandType::REGISTER), reg(r) {}
-    explicit Operand(int64_t i) : type(OperandType::IMMEDIATE), imm(i) {}
+  struct Register {
+    uint32_t value;
+    explicit Register(uint32_t v) : value(v) {}
   };
+
+  struct Immediate {
+    int64_t value;
+    explicit Immediate(int64_t v) : value(v) {}
+  };
+
+  struct None {};
+
+  using Operand = std::variant<None, Register, Immediate>;
 
   // Public members - this is a simple data container
   Opcode opcode;
@@ -113,20 +114,26 @@ public:
   // Helper methods for common operand patterns
   bool hasRegisterOperand(size_t index) const {
     return index < operands.size() &&
-           operands[index].type == OperandType::REGISTER;
+           std::holds_alternative<Register>(operands[index]);
   }
 
   bool hasImmediateOperand(size_t index) const {
     return index < operands.size() &&
-           operands[index].type == OperandType::IMMEDIATE;
+           std::holds_alternative<Immediate>(operands[index]);
   }
 
   uint32_t getRegister(size_t index) const {
-    return (hasRegisterOperand(index)) ? operands[index].reg : 0;
+    if (hasRegisterOperand(index)) {
+      return std::get<Register>(operands[index]).value;
+    }
+    return 0;
   }
 
   int64_t getImmediate(size_t index) const {
-    return (hasImmediateOperand(index)) ? operands[index].imm : 0;
+    if (hasImmediateOperand(index)) {
+      return std::get<Immediate>(operands[index]).value;
+    }
+    return 0;
   }
 
 private:

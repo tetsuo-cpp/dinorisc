@@ -141,17 +141,18 @@ std::string Instruction::opcodeToString(Opcode op) {
 
 std::string Instruction::operandToString(const Operand &op) {
   std::stringstream ss;
-  switch (op.type) {
-  case OperandType::REGISTER:
-    ss << "x" << op.reg;
-    break;
-  case OperandType::IMMEDIATE:
-    ss << op.imm;
-    break;
-  case OperandType::NONE:
-    ss << "none";
-    break;
-  }
+  std::visit(
+      [&ss](const auto &operand) {
+        using T = std::decay_t<decltype(operand)>;
+        if constexpr (std::is_same_v<T, Register>) {
+          ss << "x" << operand.value;
+        } else if constexpr (std::is_same_v<T, Immediate>) {
+          ss << operand.value;
+        } else if constexpr (std::is_same_v<T, None>) {
+          ss << "none";
+        }
+      },
+      op);
   return ss.str();
 }
 

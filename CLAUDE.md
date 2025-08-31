@@ -11,8 +11,8 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
 - **lib/**: Core translation library (`DinoRISCLib`) containing the main translation logic
   - `BinaryTranslator`: Main class orchestrating the dynamic binary translation process
   - `ELFReader`: Parses RISC-V ELF binaries using ELFIO library
-  - `RV64IDecoder`: Decodes RV64I instructions from binary data
-  - `RV64IInstruction`: Represents decoded RISC-V instructions with all formats
+  - `RISCV/Decoder`: Decodes RISC-V instructions from binary data
+  - `RISCV/Instruction`: Represents decoded RISC-V instructions with all formats
 - **tools/dinorisc/**: Command-line executable that executes RISC-V binaries
 - **third_party/**: External dependencies (ELFIO library, Catch2 testing framework)
 - **tests/**: Unit and end-to-end tests
@@ -37,7 +37,7 @@ ninja format  # Runs clang-format on C++ files and black on Python files
 ### Testing
 ```bash
 ninja && ctest --output-on-failure  # Run all tests
-./bin/RV64IDecoderTest              # Run specific unit test
+./bin/DecoderTest                   # Run specific unit test
 ninja test-e2e                      # Run end-to-end tests only
 ```
 

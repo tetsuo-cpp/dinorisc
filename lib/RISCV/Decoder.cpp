@@ -219,9 +219,9 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::SLLW:
   case Instruction::Opcode::SRLW:
   case Instruction::Opcode::SRAW:
-    operands.emplace_back(fields.rd);
-    operands.emplace_back(fields.rs1);
-    operands.emplace_back(fields.rs2);
+    operands.emplace_back(Instruction::Register(fields.rd));
+    operands.emplace_back(Instruction::Register(fields.rs1));
+    operands.emplace_back(Instruction::Register(fields.rs2));
     break;
 
   // I-type: rd, rs1, imm
@@ -238,15 +238,17 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::SLLIW:
   case Instruction::Opcode::SRLIW:
   case Instruction::Opcode::SRAIW:
-    operands.emplace_back(fields.rd);
-    operands.emplace_back(fields.rs1);
-    operands.emplace_back(static_cast<int64_t>(extractITypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rd));
+    operands.emplace_back(Instruction::Register(fields.rs1));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractITypeImmediate(raw))));
     break;
 
   case Instruction::Opcode::JALR:
-    operands.emplace_back(fields.rd);
-    operands.emplace_back(fields.rs1);
-    operands.emplace_back(static_cast<int64_t>(extractITypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rd));
+    operands.emplace_back(Instruction::Register(fields.rs1));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractITypeImmediate(raw))));
     break;
 
   // Load: rd, rs1, offset
@@ -257,9 +259,10 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::LBU:
   case Instruction::Opcode::LHU:
   case Instruction::Opcode::LWU:
-    operands.emplace_back(fields.rd);
-    operands.emplace_back(fields.rs1);
-    operands.emplace_back(static_cast<int64_t>(extractITypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rd));
+    operands.emplace_back(Instruction::Register(fields.rs1));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractITypeImmediate(raw))));
     break;
 
   // Store: rs1, rs2, offset
@@ -267,9 +270,10 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::SH:
   case Instruction::Opcode::SW:
   case Instruction::Opcode::SD:
-    operands.emplace_back(fields.rs1);
-    operands.emplace_back(fields.rs2);
-    operands.emplace_back(static_cast<int64_t>(extractSTypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rs1));
+    operands.emplace_back(Instruction::Register(fields.rs2));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractSTypeImmediate(raw))));
     break;
 
   // Branch: rs1, rs2, offset
@@ -279,22 +283,25 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::BGE:
   case Instruction::Opcode::BLTU:
   case Instruction::Opcode::BGEU:
-    operands.emplace_back(fields.rs1);
-    operands.emplace_back(fields.rs2);
-    operands.emplace_back(static_cast<int64_t>(extractBTypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rs1));
+    operands.emplace_back(Instruction::Register(fields.rs2));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractBTypeImmediate(raw))));
     break;
 
   // U-type: rd, imm
   case Instruction::Opcode::LUI:
   case Instruction::Opcode::AUIPC:
-    operands.emplace_back(fields.rd);
-    operands.emplace_back(static_cast<int64_t>(extractUTypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rd));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractUTypeImmediate(raw))));
     break;
 
   // J-type: rd, offset
   case Instruction::Opcode::JAL:
-    operands.emplace_back(fields.rd);
-    operands.emplace_back(static_cast<int64_t>(extractJTypeImmediate(raw)));
+    operands.emplace_back(Instruction::Register(fields.rd));
+    operands.emplace_back(Instruction::Immediate(
+        static_cast<int64_t>(extractJTypeImmediate(raw))));
     break;
 
   // System: no operands

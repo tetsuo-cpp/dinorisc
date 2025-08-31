@@ -60,6 +60,14 @@ ninja test-e2e                      # Run end-to-end tests only
 - Namespace: `dinorisc`
 - The project uses a `.clang-format` file for consistent formatting
 
+## Coding Style Principles
+
+- **Write concise, idiomatic code**: Favor clear, direct solutions over verbose implementations
+- **Avoid over-engineering**: Implement only what is needed; don't build for hypothetical future requirements
+- **Avoid overly defensive code**: Don't add unnecessary checks for conditions that shouldn't occur in normal operation
+- **Use comments judiciously**: Add comments sparingly and only when they provide value
+- **Focus comments on intent**: Explain *why* the code exists and *what* it's trying to achieve, not *how* it works (the code should be self-explanatory)
+
 ## Build System
 
 - CMake with Ninja generator preferred

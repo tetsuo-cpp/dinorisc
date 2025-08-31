@@ -22,11 +22,12 @@ private:
   std::unique_ptr<RV64IDecoder> decoder;
 
   void initializeTranslator();
-  bool loadAndDecodeRISCV(const std::string &inputPath);
-  bool executeWithDBT(const std::vector<RV64IInstruction> &instructions);
+  bool loadRISCVBinary(const std::string &inputPath);
+  bool executeWithDBT();
 
   // Current translation state
-  std::vector<RV64IInstruction> instructions;
+  std::vector<uint8_t> textSectionData;
+  uint64_t textBaseAddress;
   uint64_t entryPoint;
 };
 

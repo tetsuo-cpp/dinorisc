@@ -2,36 +2,21 @@
 
 #include "RV64IInstruction.h"
 #include <cstdint>
-#include <vector>
 
 namespace dinorisc {
 
 class RV64IDecoder {
 public:
-  RV64IDecoder();
-  ~RV64IDecoder();
+  RV64IDecoder() = default;
+  ~RV64IDecoder() = default;
 
-  // Decode a single 32-bit instruction at given PC address
+  // Primary interface: decode a single 32-bit instruction at given PC address
   RV64IInstruction decode(uint32_t rawInstruction, uint64_t pc) const;
 
-  // Decode a sequence of instructions from byte array
-  std::vector<RV64IInstruction>
-  decodeInstructions(const uint8_t *data, size_t size,
-                     uint64_t baseAddress = 0) const;
-
-  // Decode instructions from vector
-  std::vector<RV64IInstruction>
-  decodeInstructions(const std::vector<uint8_t> &data,
-                     uint64_t baseAddress = 0) const;
-
-  // Statistics
-  size_t getTotalInstructionsDecoded() const { return totalDecoded; }
-  size_t getInvalidInstructionsCount() const { return invalidCount; }
+  // Helper to read a 32-bit instruction from memory (little-endian)
+  static uint32_t readInstruction(const uint8_t *data, size_t offset);
 
 private:
-  mutable size_t totalDecoded;
-  mutable size_t invalidCount;
-
   // Internal structures for decoding
   struct DecodedFields {
     uint32_t opcode;

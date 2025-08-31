@@ -1,25 +1,14 @@
 #include "RV64IDecoder.h"
-#include <iostream>
 
 namespace dinorisc {
 
-RV64IDecoder::RV64IDecoder() : totalDecoded(0), invalidCount(0) {}
-
-RV64IDecoder::~RV64IDecoder() = default;
-
 RV64IInstruction RV64IDecoder::decode(uint32_t rawInstruction,
                                       uint64_t pc) const {
-  totalDecoded++;
-
   // Extract basic fields
   DecodedFields fields = extractFields(rawInstruction);
 
   // Determine the specific opcode
   RV64IInstruction::Opcode opcode = determineOpcode(fields, rawInstruction);
-
-  if (opcode == RV64IInstruction::Opcode::INVALID) {
-    invalidCount++;
-  }
 
   // Extract operands based on the opcode
   std::vector<RV64IInstruction::Operand> operands =
@@ -28,42 +17,7 @@ RV64IInstruction RV64IDecoder::decode(uint32_t rawInstruction,
   return RV64IInstruction(opcode, std::move(operands), rawInstruction, pc);
 }
 
-std::vector<RV64IInstruction>
-RV64IDecoder::decodeInstructions(const uint8_t *data, size_t size,
-                                 uint64_t baseAddress) const {
-  std::vector<RV64IInstruction> instructions;
-
-  if (!data || size == 0) {
-    return instructions;
-  }
-
-  // Ensure size is multiple of 4 (32-bit instructions)
-  if (size % 4 != 0) {
-    std::cerr << "Warning: Data size " << size
-              << " is not a multiple of 4 bytes. "
-              << "Ignoring last " << (size % 4) << " bytes.\n";
-  }
-
-  size_t numInstructions = size / 4;
-  instructions.reserve(numInstructions);
-
-  for (size_t i = 0; i < numInstructions; ++i) {
-    uint32_t rawInstruction = readLittleEndian32(data, i * 4);
-    uint64_t pc = baseAddress + (i * 4);
-    instructions.push_back(decode(rawInstruction, pc));
-  }
-
-  return instructions;
-}
-
-std::vector<RV64IInstruction>
-RV64IDecoder::decodeInstructions(const std::vector<uint8_t> &data,
-                                 uint64_t baseAddress) const {
-  return decodeInstructions(data.data(), data.size(), baseAddress);
-}
-
-uint32_t RV64IDecoder::readLittleEndian32(const uint8_t *data,
-                                          size_t offset) const {
+uint32_t RV64IDecoder::readInstruction(const uint8_t *data, size_t offset) {
   return static_cast<uint32_t>(data[offset]) |
          (static_cast<uint32_t>(data[offset + 1]) << 8) |
          (static_cast<uint32_t>(data[offset + 2]) << 16) |

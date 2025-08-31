@@ -5,12 +5,6 @@
 
 using namespace dinorisc;
 
-TEST_CASE("RV64IDecoder Basic Construction", "[decoder]") {
-  RV64IDecoder decoder;
-  REQUIRE(decoder.getTotalInstructionsDecoded() == 0);
-  REQUIRE(decoder.getInvalidInstructionsCount() == 0);
-}
-
 TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
   RV64IDecoder decoder;
 
@@ -357,7 +351,6 @@ TEST_CASE("RV64IDecoder Invalid Instructions", "[decoder][invalid]") {
     auto inst = decoder.decode(raw, 0);
 
     REQUIRE(inst.opcode == RV64IInstruction::Opcode::INVALID);
-    REQUIRE(decoder.getInvalidInstructionsCount() == 1);
   }
 
   SECTION("Invalid funct3 for valid opcode") {
@@ -376,88 +369,29 @@ TEST_CASE("RV64IDecoder Invalid Instructions", "[decoder][invalid]") {
   }
 }
 
-TEST_CASE("RV64IDecoder Batch Decoding", "[decoder][batch]") {
-  RV64IDecoder decoder;
+TEST_CASE("RV64IDecoder readInstruction Helper", "[decoder][helper]") {
+  SECTION("Read 32-bit instruction from byte array (little-endian)") {
+    // ADDI x1, x0, 10 -> 0x00A00093 in little-endian bytes
+    std::vector<uint8_t> data = {0x93, 0x00, 0xA0, 0x00};
 
-  SECTION("Decode multiple instructions from byte array") {
-    // Create byte array with multiple instructions in little-endian format
-    std::vector<uint8_t> data = {// ADDI x1, x0, 10 -> 0x00A00093
+    uint32_t instruction = RV64IDecoder::readInstruction(data.data(), 0);
+
+    REQUIRE(instruction == 0x00A00093);
+  }
+
+  SECTION("Read from different offset") {
+    // Two instructions back-to-back
+    std::vector<uint8_t> data = {// First: ADDI x1, x0, 10 -> 0x00A00093
                                  0x93, 0x00, 0xA0, 0x00,
-                                 // ADD x2, x1, x1 -> 0x001080B3
-                                 0xB3, 0x80, 0x10, 0x00,
-                                 // SW x2, 0(x1) -> 0x00212023
-                                 0x23, 0x20, 0x21, 0x00};
+                                 // Second: ADD x2, x1, x1 -> 0x001080B3
+                                 0xB3, 0x80, 0x10, 0x00};
 
-    uint64_t baseAddr = 0x1000;
-    auto instructions = decoder.decodeInstructions(data, baseAddr);
+    uint32_t first = RV64IDecoder::readInstruction(data.data(), 0);
+    uint32_t second = RV64IDecoder::readInstruction(data.data(), 4);
 
-    REQUIRE(instructions.size() == 3);
-
-    // First instruction: ADDI
-    REQUIRE(instructions[0].opcode == RV64IInstruction::Opcode::ADDI);
-    REQUIRE(instructions[0].address == 0x1000);
-    REQUIRE(instructions[0].operands[2].imm == 10);
-
-    // Second instruction: ADD
-    REQUIRE(instructions[1].opcode == RV64IInstruction::Opcode::ADD);
-    REQUIRE(instructions[1].address == 0x1004);
-
-    // Third instruction: SW
-    REQUIRE(instructions[2].opcode == RV64IInstruction::Opcode::SW);
-    REQUIRE(instructions[2].address == 0x1008);
+    REQUIRE(first == 0x00A00093);
+    REQUIRE(second == 0x001080B3);
   }
-
-  SECTION("Handle misaligned data gracefully") {
-    // 7 bytes (not multiple of 4)
-    std::vector<uint8_t> data = {0x93, 0x00, 0xA0, 0x00, 0xB3, 0x80, 0x10};
-
-    auto instructions = decoder.decodeInstructions(data, 0);
-
-    // Should decode only 1 complete instruction (4 bytes), ignoring last 3
-    // bytes
-    REQUIRE(instructions.size() == 1);
-    REQUIRE(instructions[0].opcode == RV64IInstruction::Opcode::ADDI);
-  }
-
-  SECTION("Handle empty data") {
-    std::vector<uint8_t> empty;
-
-    auto instructions = decoder.decodeInstructions(empty, 0);
-
-    REQUIRE(instructions.size() == 0);
-  }
-
-  SECTION("Handle null pointer") {
-    auto instructions = decoder.decodeInstructions(nullptr, 0, 0);
-
-    REQUIRE(instructions.size() == 0);
-  }
-}
-
-TEST_CASE("RV64IDecoder Statistics Tracking", "[decoder][stats]") {
-  RV64IDecoder decoder;
-
-  REQUIRE(decoder.getTotalInstructionsDecoded() == 0);
-  REQUIRE(decoder.getInvalidInstructionsCount() == 0);
-
-  // Decode valid instruction
-  decoder.decode(0x00A00093, 0); // ADDI
-
-  REQUIRE(decoder.getTotalInstructionsDecoded() == 1);
-  REQUIRE(decoder.getInvalidInstructionsCount() == 0);
-
-  // Decode invalid instruction
-  decoder.decode(0x00000007, 0); // Invalid
-
-  REQUIRE(decoder.getTotalInstructionsDecoded() == 2);
-  REQUIRE(decoder.getInvalidInstructionsCount() == 1);
-
-  // Decode more valid instructions
-  decoder.decode(0x003100B3, 0); // ADD
-  decoder.decode(0x00312623, 0); // SW
-
-  REQUIRE(decoder.getTotalInstructionsDecoded() == 4);
-  REQUIRE(decoder.getInvalidInstructionsCount() == 1);
 }
 
 TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {

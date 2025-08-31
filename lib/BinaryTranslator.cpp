@@ -4,7 +4,9 @@
 
 namespace dinorisc {
 
-BinaryTranslator::BinaryTranslator() : entryPoint(0) { initializeTranslator(); }
+BinaryTranslator::BinaryTranslator() : textBaseAddress(0), entryPoint(0) {
+  initializeTranslator();
+}
 
 BinaryTranslator::~BinaryTranslator() = default;
 
@@ -12,24 +14,28 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
   std::cout << "Loading and executing RISC-V binary: " << inputPath
             << std::endl;
 
-  // Step 1: Load and decode RISC-V ELF binary
-  if (!loadAndDecodeRISCV(inputPath)) {
+  // Step 1: Load RISC-V ELF binary
+  if (!loadRISCVBinary(inputPath)) {
     return false;
   }
 
-  std::cout << "Loaded " << instructions.size() << " RISC-V instructions"
+  std::cout << "Loaded text section: " << textSectionData.size() << " bytes"
             << std::endl;
   std::cout << "Entry point: 0x" << std::hex << entryPoint << std::dec
             << std::endl;
 
   // Print first few instructions for verification
   std::cout << "\nFirst few instructions:" << std::endl;
-  for (size_t i = 0; i < std::min(instructions.size(), size_t(10)); ++i) {
-    std::cout << "[" << i << "] " << instructions[i].toString() << std::endl;
+  size_t numInstructions = std::min(textSectionData.size() / 4, size_t(10));
+  for (size_t i = 0; i < numInstructions; ++i) {
+    uint64_t pc = textBaseAddress + (i * 4);
+    uint32_t rawInst = decoder->readInstruction(textSectionData.data(), i * 4);
+    RV64IInstruction inst = decoder->decode(rawInst, pc);
+    std::cout << "[" << i << "] " << inst.toString() << std::endl;
   }
 
   // Step 2: Start dynamic binary translation and execution
-  if (!executeWithDBT(instructions)) {
+  if (!executeWithDBT()) {
     return false;
   }
 
@@ -41,7 +47,7 @@ void BinaryTranslator::initializeTranslator() {
   decoder = std::make_unique<RV64IDecoder>();
 }
 
-bool BinaryTranslator::loadAndDecodeRISCV(const std::string &inputPath) {
+bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
   // Load ELF file
   if (!elfReader->loadFile(inputPath)) {
     std::cerr << "Error loading ELF file: " << elfReader->getErrorMessage()
@@ -62,23 +68,14 @@ bool BinaryTranslator::loadAndDecodeRISCV(const std::string &inputPath) {
             << " Size=" << std::dec << textSection.size << " bytes"
             << std::endl;
 
-  // Decode instructions
-  instructions =
-      decoder->decodeInstructions(textSection.data, textSection.virtualAddress);
-
-  // Print decoding statistics
-  std::cout << "Decoded " << decoder->getTotalInstructionsDecoded()
-            << " instructions" << std::endl;
-  if (decoder->getInvalidInstructionsCount() > 0) {
-    std::cout << "Warning: " << decoder->getInvalidInstructionsCount()
-              << " invalid instructions found" << std::endl;
-  }
+  // Store raw text section data for on-demand decoding
+  textSectionData = textSection.data;
+  textBaseAddress = textSection.virtualAddress;
 
   return true;
 }
 
-bool BinaryTranslator::executeWithDBT(
-    const std::vector<RV64IInstruction> &instructions) {
+bool BinaryTranslator::executeWithDBT() {
   std::cout << "\nStarting dynamic binary translation and execution..."
             << std::endl;
   std::cout << "DBT engine not yet implemented" << std::endl;
@@ -86,9 +83,18 @@ bool BinaryTranslator::executeWithDBT(
   // TODO: Implement the following:
   // 1. Create a virtual CPU state (registers, memory)
   // 2. Set up translation cache for ARM64 code blocks
-  // 3. Implement basic block detection and translation
+  // 3. Implement basic block detection and translation using on-demand decoding
   // 4. Execute translated ARM64 code with runtime support
   // 5. Handle system calls, exceptions, and memory management
+  //
+  // Example on-demand decoding during execution:
+  // uint64_t currentPC = entryPoint;
+  // while (executing) {
+  //   size_t offset = (currentPC - textBaseAddress);
+  //   uint32_t rawInst = decoder->readInstruction(textSectionData.data(),
+  //   offset); RV64IInstruction inst = decoder->decode(rawInst, currentPC);
+  //   // Translate and execute instruction...
+  // }
 
   return true;
 }

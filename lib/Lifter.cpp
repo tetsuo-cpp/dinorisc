@@ -404,60 +404,24 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
                                       uint64_t fallThroughAddress) {
   switch (inst.opcode) {
   // Conditional branches
-  case riscv::Instruction::Opcode::BEQ: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId condition =
-        createBinaryOp(ir::BinaryOpcode::Eq, ir::Type::i1, rs1, rs2);
-    uint64_t target = inst.address + inst.getImmediate(2);
-    return ir::Terminator{
-        ir::CondBranch{condition, target, fallThroughAddress}};
-  }
-  case riscv::Instruction::Opcode::BNE: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId condition =
-        createBinaryOp(ir::BinaryOpcode::Ne, ir::Type::i1, rs1, rs2);
-    uint64_t target = inst.address + inst.getImmediate(2);
-    return ir::Terminator{
-        ir::CondBranch{condition, target, fallThroughAddress}};
-  }
-  case riscv::Instruction::Opcode::BLT: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId condition =
-        createBinaryOp(ir::BinaryOpcode::Lt, ir::Type::i1, rs1, rs2);
-    uint64_t target = inst.address + inst.getImmediate(2);
-    return ir::Terminator{
-        ir::CondBranch{condition, target, fallThroughAddress}};
-  }
-  case riscv::Instruction::Opcode::BGE: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId condition =
-        createBinaryOp(ir::BinaryOpcode::Ge, ir::Type::i1, rs1, rs2);
-    uint64_t target = inst.address + inst.getImmediate(2);
-    return ir::Terminator{
-        ir::CondBranch{condition, target, fallThroughAddress}};
-  }
-  case riscv::Instruction::Opcode::BLTU: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId condition =
-        createBinaryOp(ir::BinaryOpcode::LtU, ir::Type::i1, rs1, rs2);
-    uint64_t target = inst.address + inst.getImmediate(2);
-    return ir::Terminator{
-        ir::CondBranch{condition, target, fallThroughAddress}};
-  }
-  case riscv::Instruction::Opcode::BGEU: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId condition =
-        createBinaryOp(ir::BinaryOpcode::GeU, ir::Type::i1, rs1, rs2);
-    uint64_t target = inst.address + inst.getImmediate(2);
-    return ir::Terminator{
-        ir::CondBranch{condition, target, fallThroughAddress}};
-  }
+  case riscv::Instruction::Opcode::BEQ:
+    return createConditionalBranch(ir::BinaryOpcode::Eq, inst,
+                                   fallThroughAddress);
+  case riscv::Instruction::Opcode::BNE:
+    return createConditionalBranch(ir::BinaryOpcode::Ne, inst,
+                                   fallThroughAddress);
+  case riscv::Instruction::Opcode::BLT:
+    return createConditionalBranch(ir::BinaryOpcode::Lt, inst,
+                                   fallThroughAddress);
+  case riscv::Instruction::Opcode::BGE:
+    return createConditionalBranch(ir::BinaryOpcode::Ge, inst,
+                                   fallThroughAddress);
+  case riscv::Instruction::Opcode::BLTU:
+    return createConditionalBranch(ir::BinaryOpcode::LtU, inst,
+                                   fallThroughAddress);
+  case riscv::Instruction::Opcode::BGEU:
+    return createConditionalBranch(ir::BinaryOpcode::GeU, inst,
+                                   fallThroughAddress);
 
   // Unconditional jumps
   case riscv::Instruction::Opcode::JAL: {
@@ -482,6 +446,20 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
     throw std::runtime_error(
         "Invalid terminator instruction in liftTerminator");
   }
+}
+
+ir::Terminator Lifter::createConditionalBranch(ir::BinaryOpcode compareOp,
+                                               const riscv::Instruction &inst,
+                                               uint64_t fallThroughAddress) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+  ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+  ir::ValueId condition = createBinaryOp(compareOp, ir::Type::i1, rs1, rs2);
+  uint64_t target = calculateBranchTarget(inst);
+  return ir::Terminator{ir::CondBranch{condition, target, fallThroughAddress}};
+}
+
+uint64_t Lifter::calculateBranchTarget(const riscv::Instruction &inst) {
+  return inst.address + inst.getImmediate(2);
 }
 
 } // namespace dinorisc

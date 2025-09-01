@@ -54,6 +54,12 @@ private:
   ir::Terminator liftTerminator(const riscv::Instruction &inst,
                                 uint64_t fallThroughAddress);
   void liftSingleInstruction(const riscv::Instruction &inst);
+
+  // Terminator creation helpers
+  ir::Terminator createConditionalBranch(ir::BinaryOpcode compareOp,
+                                         const riscv::Instruction &inst,
+                                         uint64_t fallThroughAddress);
+  uint64_t calculateBranchTarget(const riscv::Instruction &inst);
 };
 
 } // namespace dinorisc

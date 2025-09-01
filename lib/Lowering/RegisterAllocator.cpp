@@ -141,8 +141,6 @@ void RegisterAllocator::replaceVirtualRegisters(arm64::Instruction &inst) {
 arm64::Operand
 RegisterAllocator::replaceOperandRegister(const arm64::Operand &operand) {
   if (std::holds_alternative<arm64::Register>(operand)) {
-    arm64::Register reg = std::get<arm64::Register>(operand);
-
     // If this is a virtual register (represented as a physical reg
     // placeholder), we need a better way to identify and map virtual registers.
     // For now, just return the operand as-is since our instruction selector

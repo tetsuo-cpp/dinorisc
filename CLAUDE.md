@@ -13,6 +13,7 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
   - `ELFReader`: Parses RISC-V ELF binaries using ELFIO library
   - `RISCV/Decoder`: Decodes RISC-V instructions from binary data
   - `RISCV/Instruction`: Represents decoded RISC-V instructions with all formats
+  - `IR/`: Block-local SSA intermediate representation for translation pipeline
 - **tools/dinorisc/**: Command-line executable that executes RISC-V binaries
 - **third_party/**: External dependencies (ELFIO library, Catch2 testing framework)
 - **tests/**: Unit and end-to-end tests
@@ -67,6 +68,7 @@ ninja test-e2e                      # Run end-to-end tests only
 - **Avoid overly defensive code**: Don't add unnecessary checks for conditions that shouldn't occur in normal operation
 - **Use comments judiciously**: Add comments sparingly and only when they provide value
 - **Focus comments on intent**: Explain *why* the code exists and *what* it's trying to achieve, not *how* it works (the code should be self-explanatory)
+- **Prefer clear data structures**: Use either classes with meaningful methods or clean POD structs with aggregate initialization; avoid mixing tiny helper methods into data-only structs
 
 ## Build System
 

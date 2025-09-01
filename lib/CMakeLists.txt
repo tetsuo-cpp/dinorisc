@@ -3,6 +3,7 @@ set(DINORISC_LIB_SOURCES
   ELFReader.cpp
   RISCV/Decoder.cpp
   RISCV/Instruction.cpp
+  IR/IR.cpp
 )
 
 set(DINORISC_LIB_HEADERS
@@ -10,6 +11,7 @@ set(DINORISC_LIB_HEADERS
   ELFReader.h
   RISCV/Decoder.h
   RISCV/Instruction.h
+  IR/IR.h
 )
 
 add_library(DinoRISCLib STATIC

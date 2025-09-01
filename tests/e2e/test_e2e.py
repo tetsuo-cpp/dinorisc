@@ -76,7 +76,7 @@ class TestDinoRISCDecoding:
 
             # Run dinorisc on the ELF file
             cmd = [str(DINORISC_BIN), elf_path]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=False, text=True, timeout=30)
 
             # dinorisc should run successfully (exit code 0)
             assert (

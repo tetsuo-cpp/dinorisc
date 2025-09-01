@@ -11,11 +11,15 @@ class Lifter {
 public:
   Lifter();
 
-  // Lift a single RISC-V instruction to IR instructions
-  std::vector<ir::Instruction> liftInstruction(const riscv::Instruction &inst);
+  // Lift a basic block of RISC-V instructions to IR basic block
+  ir::BasicBlock
+  liftBasicBlock(const std::vector<riscv::Instruction> &instructions);
 
   // Get the current IR value for a RISC-V register
   ir::ValueId getRegisterValue(uint32_t regNum);
+
+  // Check if an instruction is a control flow terminator
+  bool isTerminator(const riscv::Instruction &inst);
 
 private:
   // SSA value ID counter
@@ -45,6 +49,11 @@ private:
 
   // Helper method to add instruction to current list and return its value ID
   ir::ValueId addInstruction(ir::InstructionKind kind);
+
+  // Control flow helpers
+  ir::Terminator liftTerminator(const riscv::Instruction &inst,
+                                uint64_t fallThroughAddress);
+  void liftSingleInstruction(const riscv::Instruction &inst);
 };
 
 } // namespace dinorisc

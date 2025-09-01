@@ -25,27 +25,44 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
             << std::endl;
 
   // Print all instructions and their IR lifting
-  std::cout << "\nLifting instructions to IR:" << std::endl;
+  std::cout << "\nLifting instructions to IR basic blocks:" << std::endl;
   size_t numInstructions = textSectionData.size() / 4;
+
+  // Decode all instructions first
+  std::vector<riscv::Instruction> instructions;
   for (size_t i = 0; i < numInstructions; ++i) {
     uint64_t pc = textBaseAddress + (i * 4);
     uint32_t rawInst = decoder->readInstruction(textSectionData.data(), i * 4);
     riscv::Instruction inst = decoder->decode(rawInst, pc);
+    instructions.push_back(inst);
+  }
 
-    std::cout << "[" << i << "] RISC-V: " << inst.toString() << std::endl;
+  // Process instructions in basic blocks
+  size_t blockNum = 0;
+  for (size_t i = 0; i < instructions.size();) {
+    std::vector<riscv::Instruction> blockInstructions;
+    size_t blockStart = i;
 
-    // Lift to IR and print
-    std::vector<ir::Instruction> irInstructions = lifter->liftInstruction(inst);
-    if (!irInstructions.empty()) {
-      std::cout << "     IR:     ";
-      for (size_t j = 0; j < irInstructions.size(); ++j) {
-        if (j > 0)
-          std::cout << "             ";
-        std::cout << irInstructions[j].toString() << std::endl;
+    // Collect instructions until we hit a terminator
+    while (i < instructions.size()) {
+      blockInstructions.push_back(instructions[i]);
+      if (lifter->isTerminator(instructions[i])) {
+        i++;
+        break;
       }
-    } else {
-      std::cout << "     IR:     (unsupported instruction)" << std::endl;
+      i++;
     }
+
+    // Print the basic block
+    std::cout << "Basic Block " << blockNum++ << ":" << std::endl;
+    for (size_t j = 0; j < blockInstructions.size(); ++j) {
+      std::cout << "  [" << (blockStart + j)
+                << "] RISC-V: " << blockInstructions[j].toString() << std::endl;
+    }
+
+    // Lift to IR basic block and print
+    ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
+    std::cout << "  IR Block: " << irBlock.toString() << std::endl;
     std::cout << std::endl;
   }
 

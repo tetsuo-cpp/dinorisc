@@ -11,10 +11,40 @@ Lifter::Lifter() : nextValueId(1) {
   }
 }
 
-std::vector<ir::Instruction>
-Lifter::liftInstruction(const riscv::Instruction &inst) {
+ir::BasicBlock
+Lifter::liftBasicBlock(const std::vector<riscv::Instruction> &instructions) {
   currentInstructions.clear();
+  ir::BasicBlock block;
 
+  for (size_t i = 0; i < instructions.size(); ++i) {
+    const auto &inst = instructions[i];
+
+    if (isTerminator(inst)) {
+      // This instruction terminates the block - don't lift it as a regular
+      // instruction
+      uint64_t fallThroughAddress = (i + 1 < instructions.size())
+                                        ? instructions[i + 1].address
+                                        : inst.address + 4;
+      block.terminator = liftTerminator(inst, fallThroughAddress);
+      break;
+    } else {
+      // Regular instruction
+      liftSingleInstruction(inst);
+    }
+  }
+
+  // If we didn't find a terminator, create a fall-through branch
+  if (instructions.empty() || !isTerminator(instructions.back())) {
+    uint64_t nextAddress =
+        instructions.empty() ? 0 : instructions.back().address + 4;
+    block.terminator = ir::Terminator{ir::Branch{nextAddress}};
+  }
+
+  block.instructions = currentInstructions;
+  return block;
+}
+
+void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
   switch (inst.opcode) {
   // Arithmetic instructions
   case riscv::Instruction::Opcode::ADD: {
@@ -170,8 +200,59 @@ Lifter::liftInstruction(const riscv::Instruction &inst) {
     setRegisterValue(inst.getRegister(0), result);
     break;
   }
+  case riscv::Instruction::Opcode::SLLIW: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId imm = createConstant(
+        ir::Type::i32, static_cast<uint64_t>(inst.getImmediate(2)));
+    ir::ValueId rs1_trunc = createTrunc(ir::Type::i64, ir::Type::i32, rs1);
+    ir::ValueId result_32 =
+        createBinaryOp(ir::BinaryOpcode::Shl, ir::Type::i32, rs1_trunc, imm);
+    ir::ValueId result = createSext(ir::Type::i32, ir::Type::i64, result_32);
+    setRegisterValue(inst.getRegister(0), result);
+    break;
+  }
+
+  // Comparison instructions
+  case riscv::Instruction::Opcode::SLT: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
+    ir::ValueId result =
+        createBinaryOp(ir::BinaryOpcode::Lt, ir::Type::i64, rs1, rs2);
+    setRegisterValue(inst.getRegister(0), result);
+    break;
+  }
+  case riscv::Instruction::Opcode::SLTU: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
+    ir::ValueId result =
+        createBinaryOp(ir::BinaryOpcode::LtU, ir::Type::i64, rs1, rs2);
+    setRegisterValue(inst.getRegister(0), result);
+    break;
+  }
 
   // Load instructions
+  case riscv::Instruction::Opcode::LB: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId imm = createConstant(
+        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
+    ir::ValueId addr =
+        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
+    ir::ValueId load8 = createLoad(ir::Type::i8, addr);
+    ir::ValueId result = createSext(ir::Type::i8, ir::Type::i64, load8);
+    setRegisterValue(inst.getRegister(0), result);
+    break;
+  }
+  case riscv::Instruction::Opcode::LH: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId imm = createConstant(
+        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
+    ir::ValueId addr =
+        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
+    ir::ValueId load16 = createLoad(ir::Type::i16, addr);
+    ir::ValueId result = createSext(ir::Type::i16, ir::Type::i64, load16);
+    setRegisterValue(inst.getRegister(0), result);
+    break;
+  }
   case riscv::Instruction::Opcode::LD: {
     ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
     ir::ValueId imm = createConstant(
@@ -247,10 +328,8 @@ Lifter::liftInstruction(const riscv::Instruction &inst) {
 
   default:
     throw std::runtime_error("Unsupported RISC-V instruction in lifter: " +
-                             std::to_string(static_cast<int>(inst.opcode)));
+                             inst.toString());
   }
-
-  return currentInstructions;
 }
 
 ir::ValueId Lifter::getRegisterValue(uint32_t regNum) {
@@ -303,6 +382,106 @@ ir::ValueId Lifter::addInstruction(ir::InstructionKind kind) {
   ir::ValueId valueId = nextValueId++;
   currentInstructions.push_back({valueId, kind});
   return valueId;
+}
+
+bool Lifter::isTerminator(const riscv::Instruction &inst) {
+  switch (inst.opcode) {
+  case riscv::Instruction::Opcode::BEQ:
+  case riscv::Instruction::Opcode::BNE:
+  case riscv::Instruction::Opcode::BLT:
+  case riscv::Instruction::Opcode::BGE:
+  case riscv::Instruction::Opcode::BLTU:
+  case riscv::Instruction::Opcode::BGEU:
+  case riscv::Instruction::Opcode::JAL:
+  case riscv::Instruction::Opcode::JALR:
+    return true;
+  default:
+    return false;
+  }
+}
+
+ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
+                                      uint64_t fallThroughAddress) {
+  switch (inst.opcode) {
+  // Conditional branches
+  case riscv::Instruction::Opcode::BEQ: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId condition =
+        createBinaryOp(ir::BinaryOpcode::Eq, ir::Type::i1, rs1, rs2);
+    uint64_t target = inst.address + inst.getImmediate(2);
+    return ir::Terminator{
+        ir::CondBranch{condition, target, fallThroughAddress}};
+  }
+  case riscv::Instruction::Opcode::BNE: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId condition =
+        createBinaryOp(ir::BinaryOpcode::Ne, ir::Type::i1, rs1, rs2);
+    uint64_t target = inst.address + inst.getImmediate(2);
+    return ir::Terminator{
+        ir::CondBranch{condition, target, fallThroughAddress}};
+  }
+  case riscv::Instruction::Opcode::BLT: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId condition =
+        createBinaryOp(ir::BinaryOpcode::Lt, ir::Type::i1, rs1, rs2);
+    uint64_t target = inst.address + inst.getImmediate(2);
+    return ir::Terminator{
+        ir::CondBranch{condition, target, fallThroughAddress}};
+  }
+  case riscv::Instruction::Opcode::BGE: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId condition =
+        createBinaryOp(ir::BinaryOpcode::Ge, ir::Type::i1, rs1, rs2);
+    uint64_t target = inst.address + inst.getImmediate(2);
+    return ir::Terminator{
+        ir::CondBranch{condition, target, fallThroughAddress}};
+  }
+  case riscv::Instruction::Opcode::BLTU: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId condition =
+        createBinaryOp(ir::BinaryOpcode::LtU, ir::Type::i1, rs1, rs2);
+    uint64_t target = inst.address + inst.getImmediate(2);
+    return ir::Terminator{
+        ir::CondBranch{condition, target, fallThroughAddress}};
+  }
+  case riscv::Instruction::Opcode::BGEU: {
+    ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
+    ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
+    ir::ValueId condition =
+        createBinaryOp(ir::BinaryOpcode::GeU, ir::Type::i1, rs1, rs2);
+    uint64_t target = inst.address + inst.getImmediate(2);
+    return ir::Terminator{
+        ir::CondBranch{condition, target, fallThroughAddress}};
+  }
+
+  // Unconditional jumps
+  case riscv::Instruction::Opcode::JAL: {
+    // JAL rd, imm: rd = pc + 4, pc = pc + imm
+    ir::ValueId returnAddr = createConstant(ir::Type::i64, inst.address + 4);
+    setRegisterValue(inst.getRegister(0), returnAddr);
+    uint64_t target = inst.address + inst.getImmediate(1);
+    return ir::Terminator{ir::Branch{target}};
+  }
+  case riscv::Instruction::Opcode::JALR: {
+    // JALR rd, rs1, imm: rd = pc + 4, pc = (rs1 + imm) & ~1
+    ir::ValueId returnAddr = createConstant(ir::Type::i64, inst.address + 4);
+    setRegisterValue(inst.getRegister(0), returnAddr);
+
+    // For now, we'll treat JALR as a return (can be enhanced later for indirect
+    // jumps)
+    ir::ValueId retVal = createConstant(ir::Type::i64, 0);
+    return ir::Terminator{ir::Return{retVal, true}};
+  }
+
+  default:
+    throw std::runtime_error(
+        "Invalid terminator instruction in liftTerminator");
+  }
 }
 
 } // namespace dinorisc

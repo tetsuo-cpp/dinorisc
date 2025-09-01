@@ -386,24 +386,13 @@ TEST_CASE("RV64IDecoder Invalid Instructions", "[decoder][invalid]") {
   SECTION("Invalid opcode") {
     uint32_t raw = 0x00000007; // Invalid opcode
 
-    auto inst = decoder.decode(raw, 0);
-
-    REQUIRE(inst.opcode == Instruction::Opcode::INVALID);
+    REQUIRE_THROWS_AS(decoder.decode(raw, 0), std::runtime_error);
   }
 
   SECTION("Invalid funct3 for valid opcode") {
-    uint32_t raw =
-        0x0000F033; // OP opcode (0x33) with completely invalid pattern
+    uint32_t raw = 0x0000001F; // Invalid opcode 0x1F
 
-    auto inst = decoder.decode(raw, 0);
-
-    // This should decode as AND since funct3=7 is valid for AND, so let's use
-    // different invalid pattern Actually, let's use a truly invalid opcode
-    // instead
-    raw = 0x0000001F; // Invalid opcode 0x1F
-    inst = decoder.decode(raw, 0);
-
-    REQUIRE(inst.opcode == Instruction::Opcode::INVALID);
+    REQUIRE_THROWS_AS(decoder.decode(raw, 0), std::runtime_error);
   }
 }
 

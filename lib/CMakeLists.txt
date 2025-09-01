@@ -5,6 +5,10 @@ set(DINORISC_LIB_SOURCES
   RISCV/Decoder.cpp
   RISCV/Instruction.cpp
   IR/IR.cpp
+  ARM64/Instruction.cpp
+  Lowering/LivenessAnalysis.cpp
+  Lowering/InstructionSelector.cpp
+  Lowering/RegisterAllocator.cpp
 )
 
 set(DINORISC_LIB_HEADERS
@@ -14,6 +18,10 @@ set(DINORISC_LIB_HEADERS
   RISCV/Decoder.h
   RISCV/Instruction.h
   IR/IR.h
+  ARM64/Instruction.h
+  Lowering/LivenessAnalysis.h
+  Lowering/InstructionSelector.h
+  Lowering/RegisterAllocator.h
 )
 
 add_library(DinoRISCLib STATIC

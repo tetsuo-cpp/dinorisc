@@ -63,6 +63,9 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
     // Lift to IR basic block and print
     ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
     std::cout << "  IR Block: " << irBlock.toString() << std::endl;
+
+    // Translate IR block to ARM64
+    auto arm64Instructions = translateToARM64(irBlock);
     std::cout << std::endl;
   }
 
@@ -78,6 +81,8 @@ void BinaryTranslator::initializeTranslator() {
   elfReader = std::make_unique<ELFReader>();
   decoder = std::make_unique<riscv::Decoder>();
   lifter = std::make_unique<Lifter>();
+  instructionSelector = std::make_unique<lowering::InstructionSelector>();
+  registerAllocator = std::make_unique<lowering::RegisterAllocator>();
 }
 
 bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
@@ -130,6 +135,44 @@ bool BinaryTranslator::executeWithDBT() {
   // }
 
   return true;
+}
+
+std::vector<arm64::Instruction>
+BinaryTranslator::translateToARM64(const ir::BasicBlock &irBlock) {
+  std::cout << "  Starting ARM64 translation for IR block..." << std::endl;
+
+  // Step 1: Instruction Selection (IR -> ARM64)
+  std::cout << "    Step 1: Instruction selection (IR -> ARM64)" << std::endl;
+  auto arm64Instructions = instructionSelector->selectInstructions(irBlock);
+  std::cout << "      Generated " << arm64Instructions.size()
+            << " ARM64 instructions" << std::endl;
+
+  // Step 2: Liveness Analysis
+  std::cout << "    Step 2: Liveness analysis" << std::endl;
+  lowering::LivenessAnalysis liveness(irBlock);
+  auto liveIntervals = liveness.computeLiveIntervals();
+  std::cout << "      Computed " << liveIntervals.size() << " live intervals"
+            << std::endl;
+
+  // Step 3: Register Allocation
+  std::cout << "    Step 3: Linear scan register allocation" << std::endl;
+  if (!registerAllocator->allocateRegisters(arm64Instructions, liveIntervals,
+                                            *instructionSelector)) {
+    std::cout << "      WARNING: Register allocation failed - using "
+                 "placeholder registers"
+              << std::endl;
+  } else {
+    std::cout << "      Register allocation successful" << std::endl;
+  }
+
+  // Log the final ARM64 instructions
+  std::cout << "    Final ARM64 instructions:" << std::endl;
+  for (size_t i = 0; i < arm64Instructions.size(); ++i) {
+    std::cout << "      [" << i << "] " << arm64Instructions[i].toString()
+              << std::endl;
+  }
+
+  return arm64Instructions;
 }
 
 } // namespace dinorisc

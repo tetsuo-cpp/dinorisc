@@ -1,4 +1,6 @@
 #include "Decoder.h"
+#include <stdexcept>
+#include <string>
 
 namespace dinorisc {
 namespace riscv {
@@ -194,7 +196,9 @@ Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
     break;
   }
 
-  return Instruction::Opcode::INVALID;
+  throw std::runtime_error("Unrecognized RISC-V instruction: opcode=0x" +
+                           std::to_string(fields.opcode) + ", raw=0x" +
+                           std::to_string(raw));
 }
 
 std::vector<Instruction::Operand>
@@ -310,7 +314,7 @@ Decoder::extractOperands(const DecodedFields &fields,
     break;
 
   case Instruction::Opcode::INVALID:
-    break;
+    throw std::runtime_error("Cannot extract operands for invalid instruction");
   }
 
   return operands;

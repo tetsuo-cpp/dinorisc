@@ -24,14 +24,29 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
   std::cout << "Entry point: 0x" << std::hex << entryPoint << std::dec
             << std::endl;
 
-  // Print first few instructions for verification
-  std::cout << "\nFirst few instructions:" << std::endl;
-  size_t numInstructions = std::min(textSectionData.size() / 4, size_t(10));
+  // Print all instructions and their IR lifting
+  std::cout << "\nLifting instructions to IR:" << std::endl;
+  size_t numInstructions = textSectionData.size() / 4;
   for (size_t i = 0; i < numInstructions; ++i) {
     uint64_t pc = textBaseAddress + (i * 4);
     uint32_t rawInst = decoder->readInstruction(textSectionData.data(), i * 4);
     riscv::Instruction inst = decoder->decode(rawInst, pc);
-    std::cout << "[" << i << "] " << inst.toString() << std::endl;
+
+    std::cout << "[" << i << "] RISC-V: " << inst.toString() << std::endl;
+
+    // Lift to IR and print
+    std::vector<ir::Instruction> irInstructions = lifter->liftInstruction(inst);
+    if (!irInstructions.empty()) {
+      std::cout << "     IR:     ";
+      for (size_t j = 0; j < irInstructions.size(); ++j) {
+        if (j > 0)
+          std::cout << "             ";
+        std::cout << irInstructions[j].toString() << std::endl;
+      }
+    } else {
+      std::cout << "     IR:     (unsupported instruction)" << std::endl;
+    }
+    std::cout << std::endl;
   }
 
   // Step 2: Start dynamic binary translation and execution
@@ -45,6 +60,7 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
 void BinaryTranslator::initializeTranslator() {
   elfReader = std::make_unique<ELFReader>();
   decoder = std::make_unique<riscv::Decoder>();
+  lifter = std::make_unique<Lifter>();
 }
 
 bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {

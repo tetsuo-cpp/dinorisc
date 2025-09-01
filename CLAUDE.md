@@ -11,6 +11,7 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
 - **lib/**: Core translation library (`DinoRISCLib`) containing the main translation logic
   - `BinaryTranslator`: Main class orchestrating the dynamic binary translation process
   - `ELFReader`: Parses RISC-V ELF binaries using ELFIO library
+  - `Lifter`: Converts RISC-V instructions to SSA intermediate representation (IR)
   - `RISCV/Decoder`: Decodes RISC-V instructions from binary data
   - `RISCV/Instruction`: Represents decoded RISC-V instructions with all formats
   - `IR/`: Block-local SSA intermediate representation for translation pipeline

@@ -95,12 +95,18 @@ struct Immediate {
   uint64_t value;
 };
 
-using Operand = std::variant<Register, Immediate>;
+using VirtualRegister = uint32_t;
+
+struct VirtualReg {
+  VirtualRegister id;
+};
+
+using Operand = std::variant<Register, VirtualReg, Immediate>;
 
 struct ThreeOperandInst {
   Opcode opcode;
   DataSize size;
-  Register dest;
+  Operand dest;
   Operand src1;
   Operand src2;
 };
@@ -108,15 +114,15 @@ struct ThreeOperandInst {
 struct TwoOperandInst {
   Opcode opcode;
   DataSize size;
-  Register dest;
+  Operand dest;
   Operand src;
 };
 
 struct MemoryInst {
   Opcode opcode;
   DataSize size;
-  Register reg;
-  Register baseReg;
+  Operand reg;
+  Operand baseReg;
   int32_t offset;
 };
 

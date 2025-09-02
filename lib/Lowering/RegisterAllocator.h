@@ -9,6 +9,8 @@
 namespace dinorisc {
 namespace lowering {
 
+using VirtualRegister = arm64::VirtualRegister;
+
 class RegisterAllocator {
 public:
   RegisterAllocator();

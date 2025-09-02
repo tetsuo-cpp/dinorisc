@@ -8,7 +8,7 @@
 namespace dinorisc {
 namespace lowering {
 
-using VirtualRegister = uint32_t;
+using VirtualRegister = arm64::VirtualRegister;
 
 class InstructionSelector {
 public:
@@ -60,9 +60,6 @@ private:
 
   // Convert IR types to ARM64 data sizes
   arm64::DataSize irTypeToDataSize(ir::Type type) const;
-
-  // Convert virtual register to ARM64 register (placeholder)
-  arm64::Register virtualToPhysical(VirtualRegister vreg) const;
 
   // Convert binary opcodes
   arm64::Opcode irBinaryOpToARM64(ir::BinaryOpcode opcode) const;

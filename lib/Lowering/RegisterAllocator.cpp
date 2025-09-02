@@ -120,17 +120,15 @@ void RegisterAllocator::replaceVirtualRegisters(arm64::Instruction &inst) {
         using T = std::decay_t<decltype(instKind)>;
 
         if constexpr (std::is_same_v<T, arm64::ThreeOperandInst>) {
+          instKind.dest = replaceOperandRegister(instKind.dest);
           instKind.src1 = replaceOperandRegister(instKind.src1);
           instKind.src2 = replaceOperandRegister(instKind.src2);
-          // dest is already a physical register placeholder, but we should map
-          // it properly For now, assume dest register mapping is handled
-          // separately
         } else if constexpr (std::is_same_v<T, arm64::TwoOperandInst>) {
+          instKind.dest = replaceOperandRegister(instKind.dest);
           instKind.src = replaceOperandRegister(instKind.src);
-          // dest mapping handled separately
         } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
-          // baseReg mapping - for now assume it's already physical
-          // reg mapping handled separately
+          instKind.reg = replaceOperandRegister(instKind.reg);
+          instKind.baseReg = replaceOperandRegister(instKind.baseReg);
         } else if constexpr (std::is_same_v<T, arm64::BranchInst>) {
           // No register operands to replace
         }
@@ -141,11 +139,13 @@ void RegisterAllocator::replaceVirtualRegisters(arm64::Instruction &inst) {
 arm64::Operand
 RegisterAllocator::replaceOperandRegister(const arm64::Operand &operand) {
   if (std::holds_alternative<arm64::Register>(operand)) {
-    // If this is a virtual register (represented as a physical reg
-    // placeholder), we need a better way to identify and map virtual registers.
-    // For now, just return the operand as-is since our instruction selector
-    // already maps virtual registers to placeholder physical registers.
+    // Physical register - return as-is
     return operand;
+  } else if (std::holds_alternative<arm64::VirtualReg>(operand)) {
+    // Virtual register - map to physical register
+    VirtualRegister vreg = std::get<arm64::VirtualReg>(operand).id;
+    arm64::Register physReg = getPhysicalRegister(vreg);
+    return physReg;
   }
 
   // For immediate operands, return as-is

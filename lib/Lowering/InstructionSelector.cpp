@@ -112,9 +112,8 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
           arm64::Instruction cmp;
           cmp.kind = arm64::ThreeOperandInst{
               arm64::Opcode::CMP, arm64::DataSize::X,
-              virtualToPhysical(condReg),
-              arm64::Register::XSP, // placeholder - will be fixed by register
-                                    // allocator
+              arm64::VirtualReg{condReg},
+              arm64::VirtualReg{condReg}, // Compare reg with itself for now
               arm64::Immediate{0}};
           result.push_back(cmp);
 
@@ -136,7 +135,7 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
             arm64::Instruction mov;
             mov.kind = arm64::TwoOperandInst{
                 arm64::Opcode::MOV, arm64::DataSize::X, arm64::Register::X0,
-                virtualToPhysical(retReg)};
+                arm64::VirtualReg{retReg}};
             result.push_back(mov);
           }
 
@@ -164,8 +163,8 @@ InstructionSelector::selectBinaryOp(const ir::BinaryOp &binOp,
   arm64::Instruction inst;
   inst.kind = arm64::ThreeOperandInst{
       irBinaryOpToARM64(binOp.opcode), irTypeToDataSize(binOp.type),
-      virtualToPhysical(destReg), virtualToPhysical(lhsReg),
-      virtualToPhysical(rhsReg)};
+      arm64::VirtualReg{destReg}, arm64::VirtualReg{lhsReg},
+      arm64::VirtualReg{rhsReg}};
 
   return inst;
 }
@@ -178,7 +177,7 @@ arm64::Instruction InstructionSelector::selectLoad(const ir::Load &load,
   arm64::Instruction inst;
   inst.kind = arm64::MemoryInst{
       arm64::Opcode::LDR, irTypeToDataSize(load.type),
-      virtualToPhysical(destReg), virtualToPhysical(addrReg),
+      arm64::VirtualReg{destReg}, arm64::VirtualReg{addrReg},
       0 // No offset for now
   };
 
@@ -194,7 +193,7 @@ arm64::Instruction InstructionSelector::selectStore(const ir::Store &store) {
   arm64::Instruction inst;
   inst.kind = arm64::MemoryInst{
       arm64::Opcode::STR, irTypeToDataSize(valueType),
-      virtualToPhysical(valueReg), virtualToPhysical(addrReg),
+      arm64::VirtualReg{valueReg}, arm64::VirtualReg{addrReg},
       0 // No offset for now
   };
 
@@ -208,7 +207,7 @@ arm64::Instruction InstructionSelector::selectConst(const ir::Const &constInst,
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{
       arm64::Opcode::MOV, irTypeToDataSize(constInst.type),
-      virtualToPhysical(destReg), arm64::Immediate{constInst.value}};
+      arm64::VirtualReg{destReg}, arm64::Immediate{constInst.value}};
 
   return inst;
 }
@@ -239,8 +238,8 @@ arm64::Instruction InstructionSelector::selectSext(const ir::Sext &sext,
 
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{opcode, irTypeToDataSize(sext.toType),
-                                    virtualToPhysical(destReg),
-                                    virtualToPhysical(srcReg)};
+                                    arm64::VirtualReg{destReg},
+                                    arm64::VirtualReg{srcReg}};
 
   return inst;
 }
@@ -272,8 +271,8 @@ arm64::Instruction InstructionSelector::selectZext(const ir::Zext &zext,
 
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{opcode, irTypeToDataSize(zext.toType),
-                                    virtualToPhysical(destReg),
-                                    virtualToPhysical(srcReg)};
+                                    arm64::VirtualReg{destReg},
+                                    arm64::VirtualReg{srcReg}};
 
   return inst;
 }
@@ -286,7 +285,7 @@ arm64::Instruction InstructionSelector::selectTrunc(const ir::Trunc &trunc,
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{
       arm64::Opcode::MOV, irTypeToDataSize(trunc.toType),
-      virtualToPhysical(destReg), virtualToPhysical(srcReg)};
+      arm64::VirtualReg{destReg}, arm64::VirtualReg{srcReg}};
 
   return inst;
 }
@@ -304,12 +303,6 @@ arm64::DataSize InstructionSelector::irTypeToDataSize(ir::Type type) const {
     return arm64::DataSize::X;
   }
   return arm64::DataSize::X;
-}
-
-arm64::Register
-InstructionSelector::virtualToPhysical(VirtualRegister vreg) const {
-  // Placeholder mapping - will be replaced by register allocator
-  return static_cast<arm64::Register>(vreg % 29); // Map to x0-x28
 }
 
 arm64::Opcode

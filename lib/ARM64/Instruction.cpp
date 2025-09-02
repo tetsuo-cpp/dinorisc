@@ -153,6 +153,8 @@ std::string dataSizeToString(DataSize size) {
 static std::string operandToString(const Operand &operand) {
   if (std::holds_alternative<Register>(operand)) {
     return registerToString(std::get<Register>(operand));
+  } else if (std::holds_alternative<VirtualReg>(operand)) {
+    return "v" + std::to_string(std::get<VirtualReg>(operand).id);
   } else {
     return "#" + std::to_string(std::get<Immediate>(operand).value);
   }
@@ -167,17 +169,16 @@ std::string Instruction::toString() const {
 
         if constexpr (std::is_same_v<T, ThreeOperandInst>) {
           oss << opcodeToString(inst.opcode) << " "
-              << registerToString(inst.dest) << ", "
+              << operandToString(inst.dest) << ", "
               << operandToString(inst.src1) << ", "
               << operandToString(inst.src2);
         } else if constexpr (std::is_same_v<T, TwoOperandInst>) {
           oss << opcodeToString(inst.opcode) << " "
-              << registerToString(inst.dest) << ", "
+              << operandToString(inst.dest) << ", "
               << operandToString(inst.src);
         } else if constexpr (std::is_same_v<T, MemoryInst>) {
-          oss << opcodeToString(inst.opcode) << " "
-              << registerToString(inst.reg) << ", ["
-              << registerToString(inst.baseReg);
+          oss << opcodeToString(inst.opcode) << " " << operandToString(inst.reg)
+              << ", [" << operandToString(inst.baseReg);
           if (inst.offset != 0) {
             oss << ", #" << inst.offset;
           }

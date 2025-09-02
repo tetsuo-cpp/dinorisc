@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../ARM64/Instruction.h"
-#include "InstructionSelector.h"
 #include "LivenessAnalysis.h"
 #include <unordered_map>
 #include <vector>
@@ -18,8 +17,7 @@ public:
   // Perform linear scan register allocation on ARM64 instructions
   // Returns true on success, false if we run out of registers
   bool allocateRegisters(std::vector<arm64::Instruction> &instructions,
-                         const std::vector<LiveInterval> &liveIntervals,
-                         const InstructionSelector &selector);
+                         const std::vector<LiveInterval> &liveIntervals);
 
   // Get the physical register assigned to a virtual register
   arm64::Register getPhysicalRegister(VirtualRegister vreg) const;

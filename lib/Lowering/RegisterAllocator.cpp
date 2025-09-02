@@ -22,8 +22,7 @@ RegisterAllocator::RegisterAllocator() {}
 
 bool RegisterAllocator::allocateRegisters(
     std::vector<arm64::Instruction> &instructions,
-    const std::vector<LiveInterval> &liveIntervals,
-    const InstructionSelector &selector) {
+    const std::vector<LiveInterval> &liveIntervals) {
   allocation.clear();
   activeIntervals.clear();
 
@@ -47,13 +46,8 @@ bool RegisterAllocator::allocateRegisters(
       return false;
     }
 
-    // Assign the register
-    VirtualRegister vreg = selector.getVirtualRegister(interval.valueId);
-    if (vreg == 0) {
-      // This shouldn't happen if selector is working correctly
-      continue;
-    }
-
+    // Assign the register directly to the virtual register
+    VirtualRegister vreg = interval.virtualRegister;
     allocation[vreg] = physReg;
     activeIntervals.push_back({interval, physReg});
   }

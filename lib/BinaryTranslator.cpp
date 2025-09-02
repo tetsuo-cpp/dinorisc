@@ -149,15 +149,14 @@ BinaryTranslator::translateToARM64(const ir::BasicBlock &irBlock) {
 
   // Step 2: Liveness Analysis
   std::cout << "    Step 2: Liveness analysis" << std::endl;
-  lowering::LivenessAnalysis liveness(irBlock);
+  lowering::LivenessAnalysis liveness(arm64Instructions);
   auto liveIntervals = liveness.computeLiveIntervals();
   std::cout << "      Computed " << liveIntervals.size() << " live intervals"
             << std::endl;
 
   // Step 3: Register Allocation
   std::cout << "    Step 3: Linear scan register allocation" << std::endl;
-  if (!registerAllocator->allocateRegisters(arm64Instructions, liveIntervals,
-                                            *instructionSelector)) {
+  if (!registerAllocator->allocateRegisters(arm64Instructions, liveIntervals)) {
     std::cout << "      WARNING: Register allocation failed - using "
                  "placeholder registers"
               << std::endl;

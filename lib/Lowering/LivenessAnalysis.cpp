@@ -3,41 +3,30 @@
 namespace dinorisc {
 namespace lowering {
 
-LivenessAnalysis::LivenessAnalysis(const ir::BasicBlock &block)
-    : block(block) {}
+LivenessAnalysis::LivenessAnalysis(
+    const std::vector<arm64::Instruction> &instructions)
+    : instructions(instructions) {}
 
 void LivenessAnalysis::computeUseDef() {
   defSites.clear();
   useSites.clear();
 
   // Process instructions in order
-  for (size_t i = 0; i < block.instructions.size(); ++i) {
-    const auto &inst = block.instructions[i];
+  for (size_t i = 0; i < instructions.size(); ++i) {
+    const auto &inst = instructions[i];
 
-    // Record definition site
-    defSites[inst.valueId] = i;
+    // Record definition sites
+    auto definedVRegs = getDefinedVirtualRegisters(inst);
+    for (uint32_t vreg : definedVRegs) {
+      defSites[vreg] = i;
+    }
 
-    // Collect used values and record use sites
-    auto usedValues = getUsedValues(inst);
-    for (ir::ValueId valueId : usedValues) {
-      useSites[valueId].push_back(i);
+    // Record use sites
+    auto usedVRegs = getUsedVirtualRegisters(inst);
+    for (uint32_t vreg : usedVRegs) {
+      useSites[vreg].push_back(i);
     }
   }
-
-  // Check terminator for additional uses
-  std::visit(
-      [&](const auto &term) {
-        using T = std::decay_t<decltype(term)>;
-
-        if constexpr (std::is_same_v<T, ir::CondBranch>) {
-          useSites[term.condition].push_back(block.instructions.size());
-        } else if constexpr (std::is_same_v<T, ir::Return>) {
-          if (term.hasValue) {
-            useSites[term.value].push_back(block.instructions.size());
-          }
-        }
-      },
-      block.terminator.kind);
 }
 
 std::vector<LiveInterval> LivenessAnalysis::computeLiveIntervals() {
@@ -45,16 +34,16 @@ std::vector<LiveInterval> LivenessAnalysis::computeLiveIntervals() {
 
   std::vector<LiveInterval> intervals;
 
-  // Create intervals for each value
-  for (const auto &[valueId, defSite] : defSites) {
+  // Create intervals for each virtual register
+  for (const auto &[vreg, defSite] : defSites) {
     LiveInterval interval;
-    interval.valueId = valueId;
+    interval.virtualRegister = vreg;
     interval.start = defSite;
 
-    // Find the last use of this value
+    // Find the last use of this virtual register
     interval.end = defSite; // At minimum, live at definition
 
-    auto useIt = useSites.find(valueId);
+    auto useIt = useSites.find(vreg);
     if (useIt != useSites.end() && !useIt->second.empty()) {
       // Extend to the last use
       interval.end =
@@ -73,19 +62,19 @@ std::vector<LiveInterval> LivenessAnalysis::computeLiveIntervals() {
   return intervals;
 }
 
-std::set<ir::ValueId> LivenessAnalysis::getLiveAtIndex(size_t index) const {
-  std::set<ir::ValueId> liveValues;
+std::set<uint32_t> LivenessAnalysis::getLiveAtIndex(size_t index) const {
+  std::set<uint32_t> liveVRegs;
 
-  // A value is live at index if it's defined before or at index
+  // A virtual register is live at index if it's defined before or at index
   // and used at or after index
-  for (const auto &[valueId, defSite] : defSites) {
+  for (const auto &[vreg, defSite] : defSites) {
     if (defSite <= index) {
       // Check if it's used after this index
-      auto useIt = useSites.find(valueId);
+      auto useIt = useSites.find(vreg);
       if (useIt != useSites.end()) {
         for (size_t useSite : useIt->second) {
           if (useSite >= index) {
-            liveValues.insert(valueId);
+            liveVRegs.insert(vreg);
             break;
           }
         }
@@ -93,59 +82,84 @@ std::set<ir::ValueId> LivenessAnalysis::getLiveAtIndex(size_t index) const {
     }
   }
 
-  return liveValues;
+  return liveVRegs;
 }
 
-std::set<ir::ValueId>
-LivenessAnalysis::getUsedValues(const ir::Instruction &inst) const {
-  std::set<ir::ValueId> usedValues;
+std::set<uint32_t> LivenessAnalysis::getUsedVirtualRegisters(
+    const arm64::Instruction &inst) const {
+  std::set<uint32_t> usedVRegs;
 
   std::visit(
       [&](const auto &instKind) {
         using T = std::decay_t<decltype(instKind)>;
 
-        if constexpr (std::is_same_v<T, ir::BinaryOp>) {
-          usedValues.insert(instKind.lhs);
-          usedValues.insert(instKind.rhs);
-        } else if constexpr (std::is_same_v<T, ir::Sext>) {
-          usedValues.insert(instKind.operand);
-        } else if constexpr (std::is_same_v<T, ir::Zext>) {
-          usedValues.insert(instKind.operand);
-        } else if constexpr (std::is_same_v<T, ir::Trunc>) {
-          usedValues.insert(instKind.operand);
-        } else if constexpr (std::is_same_v<T, ir::Load>) {
-          usedValues.insert(instKind.address);
-        } else if constexpr (std::is_same_v<T, ir::Store>) {
-          usedValues.insert(instKind.value);
-          usedValues.insert(instKind.address);
+        if constexpr (std::is_same_v<T, arm64::ThreeOperandInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.src1)) {
+            usedVRegs.insert(*vreg);
+          }
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.src2)) {
+            usedVRegs.insert(*vreg);
+          }
+        } else if constexpr (std::is_same_v<T, arm64::TwoOperandInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.src)) {
+            usedVRegs.insert(*vreg);
+          }
+        } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.baseReg)) {
+            usedVRegs.insert(*vreg);
+          }
+          // For store instructions, the reg operand is a source (value being
+          // stored)
+          if (instKind.opcode == arm64::Opcode::STR) {
+            if (auto vreg = getVirtualRegisterFromOperand(instKind.reg)) {
+              usedVRegs.insert(*vreg);
+            }
+          }
         }
-        // Const doesn't use any values
+        // BranchInst doesn't use virtual registers
       },
       inst.kind);
 
-  return usedValues;
+  return usedVRegs;
 }
 
-bool LivenessAnalysis::isUsedByTerminator(ir::ValueId valueId) const {
-  bool used = false;
+std::set<uint32_t> LivenessAnalysis::getDefinedVirtualRegisters(
+    const arm64::Instruction &inst) const {
+  std::set<uint32_t> definedVRegs;
 
   std::visit(
-      [&](const auto &term) {
-        using T = std::decay_t<decltype(term)>;
+      [&](const auto &instKind) {
+        using T = std::decay_t<decltype(instKind)>;
 
-        if constexpr (std::is_same_v<T, ir::CondBranch>) {
-          if (term.condition == valueId) {
-            used = true;
+        if constexpr (std::is_same_v<T, arm64::ThreeOperandInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+            definedVRegs.insert(*vreg);
           }
-        } else if constexpr (std::is_same_v<T, ir::Return>) {
-          if (term.hasValue && term.value == valueId) {
-            used = true;
+        } else if constexpr (std::is_same_v<T, arm64::TwoOperandInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+            definedVRegs.insert(*vreg);
+          }
+        } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
+          // For load instructions, the reg operand is a destination
+          if (instKind.opcode == arm64::Opcode::LDR) {
+            if (auto vreg = getVirtualRegisterFromOperand(instKind.reg)) {
+              definedVRegs.insert(*vreg);
+            }
           }
         }
+        // BranchInst doesn't define virtual registers
       },
-      block.terminator.kind);
+      inst.kind);
 
-  return used;
+  return definedVRegs;
+}
+
+std::optional<uint32_t> LivenessAnalysis::getVirtualRegisterFromOperand(
+    const arm64::Operand &operand) const {
+  if (std::holds_alternative<arm64::VirtualReg>(operand)) {
+    return std::get<arm64::VirtualReg>(operand).id;
+  }
+  return std::nullopt;
 }
 
 } // namespace lowering

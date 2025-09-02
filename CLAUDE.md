@@ -18,7 +18,7 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
   - `ARM64/Instruction`: ARM64 instruction representations with opcodes and operands
   - `Lowering/`: Instruction selection and register allocation for ARM64 code generation
     - `InstructionSelector`: Translates SSA IR to ARM64 instructions with virtual registers
-    - `LivenessAnalysis`: Computes live intervals for values within basic blocks
+    - `LivenessAnalysis`: Computes live intervals for virtual registers within basic blocks
     - `RegisterAllocator`: Linear scan register allocation algorithm
 - **tools/dinorisc/**: Command-line executable that executes RISC-V binaries
 - **third_party/**: External dependencies (ELFIO library, Catch2 testing framework)

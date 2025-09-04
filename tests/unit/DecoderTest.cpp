@@ -2,9 +2,20 @@
 #include "RISCV/Instruction.h"
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <vector>
 
 using namespace dinorisc;
 using namespace dinorisc::riscv;
+
+// Helper function to convert uint32_t to little-endian byte array
+std::vector<uint8_t> toBytes(uint32_t value) {
+  return {
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+    static_cast<uint8_t>((value >> 16) & 0xFF),
+    static_cast<uint8_t>((value >> 24) & 0xFF)
+  };
+}
 
 TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
   Decoder decoder;
@@ -12,9 +23,10 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
   SECTION("ADD instruction") {
     // ADD x1, x2, x3 -> 0x003100B3
     uint32_t raw = 0x003100B3;
+    auto data = toBytes(raw);
     uint64_t pc = 0x1000;
 
-    auto inst = decoder.decode(raw, pc);
+    auto inst = decoder.decode(data.data(), 0, pc);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADD);
     REQUIRE(inst.operands.size() == 3);
@@ -34,9 +46,10 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
   SECTION("SUB instruction") {
     // SUB x5, x6, x7 -> 0x407302B3
     uint32_t raw = 0x407302B3;
+    auto data = toBytes(raw);
     uint64_t pc = 0x2000;
 
-    auto inst = decoder.decode(raw, pc);
+    auto inst = decoder.decode(data.data(), 0, pc);
 
     REQUIRE(inst.opcode == Instruction::Opcode::SUB);
     REQUIRE(inst.operands.size() == 3);
@@ -51,8 +64,9 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
   SECTION("AND instruction") {
     // AND x10, x11, x12 -> 0x00C5F533
     uint32_t raw = 0x00C5F533;
+    auto data = toBytes(raw);
 
-    auto inst = decoder.decode(raw, 0);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::AND);
     REQUIRE(inst.operands.size() == 3);
@@ -67,8 +81,9 @@ TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {
   SECTION("XOR instruction") {
     // XOR x1, x2, x3 -> 0x003140B3
     uint32_t raw = 0x003140B3;
+    auto data = toBytes(raw);
 
-    auto inst = decoder.decode(raw, 0);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::XOR);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 1);
@@ -83,8 +98,9 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
   SECTION("ADDI instruction with positive immediate") {
     // ADDI x1, x2, 100 -> 0x06410093
     uint32_t raw = 0x06410093;
+    auto data = toBytes(raw);
 
-    auto inst = decoder.decode(raw, 0);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDI);
     REQUIRE(inst.operands.size() == 3);
@@ -100,8 +116,9 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
   SECTION("ADDI instruction with negative immediate") {
     // ADDI x3, x4, -1 -> 0xFFF20193
     uint32_t raw = 0xFFF20193;
+    auto data = toBytes(raw);
 
-    auto inst = decoder.decode(raw, 0);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDI);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
@@ -115,8 +132,9 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
   SECTION("ANDI instruction") {
     // ANDI x5, x6, 0xFF -> 0x0FF37293
     uint32_t raw = 0x0FF37293;
+    auto data = toBytes(raw);
 
-    auto inst = decoder.decode(raw, 0);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ANDI);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
@@ -127,8 +145,9 @@ TEST_CASE("RV64IDecoder I-Type Instructions", "[decoder][i-type]") {
   SECTION("SLLI instruction") {
     // SLLI x1, x2, 5 -> 0x00511093
     uint32_t raw = 0x00511093;
+    auto data = toBytes(raw);
 
-    auto inst = decoder.decode(raw, 0);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::SLLI);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 1);
@@ -144,7 +163,8 @@ TEST_CASE("RV64IDecoder Load Instructions", "[decoder][load]") {
     // LW x1, 8(x2) -> 0x00812083
     uint32_t raw = 0x00812083;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::LW);
     REQUIRE(inst.operands.size() == 3);
@@ -160,7 +180,8 @@ TEST_CASE("RV64IDecoder Load Instructions", "[decoder][load]") {
     // LD x5, -16(x10) -> 0xFF053283
     uint32_t raw = 0xFF053283;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::LD);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
@@ -172,7 +193,8 @@ TEST_CASE("RV64IDecoder Load Instructions", "[decoder][load]") {
     // LBU x3, 4(x8) -> 0x00444183
     uint32_t raw = 0x00444183;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::LBU);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 3);
@@ -188,7 +210,8 @@ TEST_CASE("RV64IDecoder Store Instructions", "[decoder][store]") {
     // SW x3, 12(x2) -> 0x00312623
     uint32_t raw = 0x00312623;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::SW);
     REQUIRE(inst.operands.size() == 3);
@@ -204,7 +227,8 @@ TEST_CASE("RV64IDecoder Store Instructions", "[decoder][store]") {
     // SD x5, -8(x10) -> 0xFE553C23
     uint32_t raw = 0xFE553C23;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::SD);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
@@ -223,7 +247,8 @@ TEST_CASE("RV64IDecoder Branch Instructions", "[decoder][branch]") {
     // BEQ x1, x2, 16 -> 0x00208863
     uint32_t raw = 0x00208863;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::BEQ);
     REQUIRE(inst.operands.size() == 3);
@@ -239,7 +264,8 @@ TEST_CASE("RV64IDecoder Branch Instructions", "[decoder][branch]") {
     // BNE x3, x4, -4 -> 0xFE419EE3
     uint32_t raw = 0xFE419EE3;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::BNE);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
@@ -254,7 +280,8 @@ TEST_CASE("RV64IDecoder Branch Instructions", "[decoder][branch]") {
     // BLT x5, x6, 8 -> 0x0062C463
     uint32_t raw = 0x0062C463;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::BLT);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
@@ -270,7 +297,8 @@ TEST_CASE("RV64IDecoder Jump Instructions", "[decoder][jump]") {
     // JAL x1, 100 -> 0x064000EF
     uint32_t raw = 0x064000EF;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::JAL);
     REQUIRE(inst.operands.size() == 2);
@@ -284,7 +312,8 @@ TEST_CASE("RV64IDecoder Jump Instructions", "[decoder][jump]") {
     // JALR x1, x2, 4 -> 0x004100E7
     uint32_t raw = 0x004100E7;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::JALR);
     REQUIRE(inst.operands.size() == 3);
@@ -304,7 +333,8 @@ TEST_CASE("RV64IDecoder Upper Immediate Instructions", "[decoder][upper]") {
     // LUI x1, 0x12345 -> 0x123450B7
     uint32_t raw = 0x123450B7;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::LUI);
     REQUIRE(inst.operands.size() == 2);
@@ -318,7 +348,8 @@ TEST_CASE("RV64IDecoder Upper Immediate Instructions", "[decoder][upper]") {
     // AUIPC x2, 0x1000 -> 0x01000117
     uint32_t raw = 0x01000117;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::AUIPC);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 2);
@@ -334,7 +365,8 @@ TEST_CASE("RV64IDecoder System Instructions", "[decoder][system]") {
     // ECALL -> 0x00000073
     uint32_t raw = 0x00000073;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ECALL);
     REQUIRE(inst.operands.size() == 0);
@@ -344,7 +376,8 @@ TEST_CASE("RV64IDecoder System Instructions", "[decoder][system]") {
     // EBREAK -> 0x00100073 (immediate=1 in bits 31-20)
     uint32_t raw = 0x00100073;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::EBREAK);
     REQUIRE(inst.operands.size() == 0);
@@ -358,7 +391,8 @@ TEST_CASE("RV64IDecoder 64-bit Word Instructions", "[decoder][64bit]") {
     // ADDW x1, x2, x3 -> 0x003100BB (opcode=0x3B for OP_32, funct7=0, funct3=0)
     uint32_t raw = 0x003100BB;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDW);
     REQUIRE(inst.operands.size() == 3);
@@ -371,7 +405,8 @@ TEST_CASE("RV64IDecoder 64-bit Word Instructions", "[decoder][64bit]") {
     // ADDIW x5, x6, 10 -> 0x00A3029B
     uint32_t raw = 0x00A3029B;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(inst.opcode == Instruction::Opcode::ADDIW);
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 5);
@@ -385,39 +420,57 @@ TEST_CASE("RV64IDecoder Invalid Instructions", "[decoder][invalid]") {
 
   SECTION("Invalid opcode") {
     uint32_t raw = 0x00000007; // Invalid opcode
+    auto data = toBytes(raw);
 
-    REQUIRE_THROWS_AS(decoder.decode(raw, 0), std::runtime_error);
+    REQUIRE_THROWS_AS(decoder.decode(data.data(), 0, 0), std::runtime_error);
   }
 
   SECTION("Invalid funct3 for valid opcode") {
     uint32_t raw = 0x0000001F; // Invalid opcode 0x1F
+    auto data = toBytes(raw);
 
-    REQUIRE_THROWS_AS(decoder.decode(raw, 0), std::runtime_error);
+    REQUIRE_THROWS_AS(decoder.decode(data.data(), 0, 0), std::runtime_error);
   }
 }
 
-TEST_CASE("RV64IDecoder readInstruction Helper", "[decoder][helper]") {
-  SECTION("Read 32-bit instruction from byte array (little-endian)") {
+TEST_CASE("RV64IDecoder Memory Decode", "[decoder][memory]") {
+  Decoder decoder;
+
+  SECTION("Decode instruction from byte array") {
     // ADDI x1, x0, 10 -> 0x00A00093 in little-endian bytes
     std::vector<uint8_t> data = {0x93, 0x00, 0xA0, 0x00};
+    uint64_t pc = 0x1000;
 
-    uint32_t instruction = Decoder::readInstruction(data.data(), 0);
+    auto inst = decoder.decode(data.data(), 0, pc);
 
-    REQUIRE(instruction == 0x00A00093);
+    REQUIRE(inst.opcode == Instruction::Opcode::ADDI);
+    REQUIRE(inst.operands.size() == 3);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value == 1);
+    REQUIRE(std::get<Instruction::Register>(inst.operands[1]).value == 0);
+    REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 10);
+    REQUIRE(inst.rawInstruction == 0x00A00093);
+    REQUIRE(inst.address == pc);
   }
 
-  SECTION("Read from different offset") {
+  SECTION("Decode from different offset") {
     // Two instructions back-to-back
     std::vector<uint8_t> data = {// First: ADDI x1, x0, 10 -> 0x00A00093
                                  0x93, 0x00, 0xA0, 0x00,
                                  // Second: ADD x2, x1, x1 -> 0x001080B3
                                  0xB3, 0x80, 0x10, 0x00};
+    uint64_t pc1 = 0x1000;
+    uint64_t pc2 = 0x1004;
 
-    uint32_t first = Decoder::readInstruction(data.data(), 0);
-    uint32_t second = Decoder::readInstruction(data.data(), 4);
+    auto first = decoder.decode(data.data(), 0, pc1);
+    auto second = decoder.decode(data.data(), 4, pc2);
 
-    REQUIRE(first == 0x00A00093);
-    REQUIRE(second == 0x001080B3);
+    REQUIRE(first.opcode == Instruction::Opcode::ADDI);
+    REQUIRE(first.rawInstruction == 0x00A00093);
+    REQUIRE(first.address == pc1);
+
+    REQUIRE(second.opcode == Instruction::Opcode::ADD);
+    REQUIRE(second.rawInstruction == 0x001080B3);
+    REQUIRE(second.address == pc2);
   }
 }
 
@@ -428,7 +481,8 @@ TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {
     // ADDI x1, x2, -1 (0xFFF) -> 0xFFF10093
     uint32_t raw = 0xFFF10093;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -1);
   }
@@ -437,7 +491,8 @@ TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {
     // BEQ x1, x2, -4 -> 0xFE208EE3
     uint32_t raw = 0xFE208EE3;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -4);
   }
@@ -446,7 +501,8 @@ TEST_CASE("RV64IDecoder Immediate Sign Extension", "[decoder][immediate]") {
     // JAL x1, -8 -> 0xFF9FF0EF
     uint32_t raw = 0xFF9FF0EF;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(std::get<Instruction::Immediate>(inst.operands[1]).value == -8);
   }
@@ -459,7 +515,8 @@ TEST_CASE("RV64IDecoder Edge Cases", "[decoder][edge]") {
     // ADDI x1, x2, 2047 (0x7FF) -> 0x7FF10093
     uint32_t raw = 0x7FF10093;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == 2047);
   }
@@ -468,7 +525,8 @@ TEST_CASE("RV64IDecoder Edge Cases", "[decoder][edge]") {
     // ADDI x1, x2, -2048 (0x800) -> 0x80010093
     uint32_t raw = 0x80010093;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(std::get<Instruction::Immediate>(inst.operands[2]).value == -2048);
   }
@@ -477,7 +535,8 @@ TEST_CASE("RV64IDecoder Edge Cases", "[decoder][edge]") {
     // ADD x31, x30, x29 -> 0x01DF0FB3
     uint32_t raw = 0x01DF0FB3;
 
-    auto inst = decoder.decode(raw, 0);
+    auto data = toBytes(raw);
+    auto inst = decoder.decode(data.data(), 0, 0);
 
     REQUIRE(std::get<Instruction::Register>(inst.operands[0]).value ==
             31); // rd = x31

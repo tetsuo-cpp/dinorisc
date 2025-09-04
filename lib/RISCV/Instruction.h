@@ -90,50 +90,28 @@ public:
     explicit Immediate(int64_t v) : value(v) {}
   };
 
-  struct None {};
+  using Operand = std::variant<Register, Immediate>;
 
-  using Operand = std::variant<None, Register, Immediate>;
-
-  // Public members - this is a simple data container
   Opcode opcode;
   std::vector<Operand> operands;
   uint32_t rawInstruction;
   uint64_t address;
 
-  // Constructors
   Instruction() : opcode(Opcode::INVALID), rawInstruction(0), address(0) {}
 
   Instruction(Opcode op, std::vector<Operand> ops, uint32_t raw, uint64_t addr)
       : opcode(op), operands(std::move(ops)), rawInstruction(raw),
         address(addr) {}
 
-  // Utility methods
   std::string toString() const;
   bool isValid() const { return opcode != Opcode::INVALID; }
 
-  // Helper methods for common operand patterns
-  bool hasRegisterOperand(size_t index) const {
-    return index < operands.size() &&
-           std::holds_alternative<Register>(operands[index]);
-  }
-
-  bool hasImmediateOperand(size_t index) const {
-    return index < operands.size() &&
-           std::holds_alternative<Immediate>(operands[index]);
-  }
-
   uint32_t getRegister(size_t index) const {
-    if (hasRegisterOperand(index)) {
-      return std::get<Register>(operands[index]).value;
-    }
-    return 0;
+    return std::get<Register>(operands[index]).value;
   }
 
   int64_t getImmediate(size_t index) const {
-    if (hasImmediateOperand(index)) {
-      return std::get<Immediate>(operands[index]).value;
-    }
-    return 0;
+    return std::get<Immediate>(operands[index]).value;
   }
 
 private:

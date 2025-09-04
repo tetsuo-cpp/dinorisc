@@ -148,8 +148,6 @@ std::string Instruction::operandToString(const Operand &op) {
           ss << "x" << operand.value;
         } else if constexpr (std::is_same_v<T, Immediate>) {
           ss << operand.value;
-        } else if constexpr (std::is_same_v<T, None>) {
-          ss << "none";
         }
       },
       op);

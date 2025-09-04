@@ -11,11 +11,8 @@ public:
   Decoder() = default;
   ~Decoder() = default;
 
-  // Primary interface: decode a single 32-bit instruction at given PC address
-  Instruction decode(uint32_t rawInstruction, uint64_t pc) const;
-
-  // Helper to read a 32-bit instruction from memory (little-endian)
-  static uint32_t readInstruction(const uint8_t *data, size_t offset);
+  // Decode instruction from memory at given offset and PC address
+  Instruction decode(const uint8_t *data, size_t offset, uint64_t pc) const;
 
 private:
   // Internal structures for decoding
@@ -27,7 +24,6 @@ private:
   };
 
   // Low-level decoding helpers
-  uint32_t readLittleEndian32(const uint8_t *data, size_t offset) const;
   DecodedFields extractFields(uint32_t raw) const;
   int32_t signExtend(uint32_t value, int bits) const;
 
@@ -38,12 +34,24 @@ private:
                                                     Instruction::Opcode opcode,
                                                     uint32_t raw) const;
 
+  // Operand extraction helpers
+  std::vector<Instruction::Operand>
+  extractRTypeOperands(const DecodedFields &fields) const;
+  std::vector<Instruction::Operand>
+  extractITypeOperands(const DecodedFields &fields, uint32_t raw) const;
+
   // Format-specific immediate extraction
   int32_t extractITypeImmediate(uint32_t raw) const;
   int32_t extractSTypeImmediate(uint32_t raw) const;
   int32_t extractBTypeImmediate(uint32_t raw) const;
   int32_t extractUTypeImmediate(uint32_t raw) const;
   int32_t extractJTypeImmediate(uint32_t raw) const;
+
+  // Internal decode implementation
+  Instruction decode(uint32_t rawInstruction, uint64_t pc) const;
+
+  // Helper to read a 32-bit instruction from memory (little-endian)
+  static uint32_t readInstructionFromMemory(const uint8_t *data, size_t offset);
 };
 
 } // namespace riscv

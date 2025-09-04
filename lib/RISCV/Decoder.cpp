@@ -5,6 +5,12 @@
 namespace dinorisc {
 namespace riscv {
 
+Instruction Decoder::decode(const uint8_t *data, size_t offset,
+                            uint64_t pc) const {
+  uint32_t rawInstruction = readInstructionFromMemory(data, offset);
+  return decode(rawInstruction, pc);
+}
+
 Instruction Decoder::decode(uint32_t rawInstruction, uint64_t pc) const {
   // Extract basic fields
   DecodedFields fields = extractFields(rawInstruction);
@@ -17,13 +23,6 @@ Instruction Decoder::decode(uint32_t rawInstruction, uint64_t pc) const {
       extractOperands(fields, opcode, rawInstruction);
 
   return Instruction(opcode, std::move(operands), rawInstruction, pc);
-}
-
-uint32_t Decoder::readInstruction(const uint8_t *data, size_t offset) {
-  return static_cast<uint32_t>(data[offset]) |
-         (static_cast<uint32_t>(data[offset + 1]) << 8) |
-         (static_cast<uint32_t>(data[offset + 2]) << 16) |
-         (static_cast<uint32_t>(data[offset + 3]) << 24);
 }
 
 Decoder::DecodedFields Decoder::extractFields(uint32_t raw) const {
@@ -202,10 +201,21 @@ Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
 }
 
 std::vector<Instruction::Operand>
+Decoder::extractRTypeOperands(const DecodedFields &fields) const {
+  return {Instruction::Register(fields.rd), Instruction::Register(fields.rs1),
+          Instruction::Register(fields.rs2)};
+}
+
+std::vector<Instruction::Operand>
+Decoder::extractITypeOperands(const DecodedFields &fields, uint32_t raw) const {
+  return {
+      Instruction::Register(fields.rd), Instruction::Register(fields.rs1),
+      Instruction::Immediate(static_cast<int64_t>(extractITypeImmediate(raw)))};
+}
+
+std::vector<Instruction::Operand>
 Decoder::extractOperands(const DecodedFields &fields,
                          Instruction::Opcode opcode, uint32_t raw) const {
-  std::vector<Instruction::Operand> operands;
-
   switch (opcode) {
   // R-type: rd, rs1, rs2
   case Instruction::Opcode::ADD:
@@ -223,10 +233,7 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::SLLW:
   case Instruction::Opcode::SRLW:
   case Instruction::Opcode::SRAW:
-    operands.emplace_back(Instruction::Register(fields.rd));
-    operands.emplace_back(Instruction::Register(fields.rs1));
-    operands.emplace_back(Instruction::Register(fields.rs2));
-    break;
+    return extractRTypeOperands(fields);
 
   // I-type: rd, rs1, imm
   case Instruction::Opcode::ADDI:
@@ -242,20 +249,8 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::SLLIW:
   case Instruction::Opcode::SRLIW:
   case Instruction::Opcode::SRAIW:
-    operands.emplace_back(Instruction::Register(fields.rd));
-    operands.emplace_back(Instruction::Register(fields.rs1));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractITypeImmediate(raw))));
-    break;
-
   case Instruction::Opcode::JALR:
-    operands.emplace_back(Instruction::Register(fields.rd));
-    operands.emplace_back(Instruction::Register(fields.rs1));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractITypeImmediate(raw))));
-    break;
-
-  // Load: rd, rs1, offset
+  // Load: rd, rs1, offset (same format as I-type)
   case Instruction::Opcode::LB:
   case Instruction::Opcode::LH:
   case Instruction::Opcode::LW:
@@ -263,22 +258,17 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::LBU:
   case Instruction::Opcode::LHU:
   case Instruction::Opcode::LWU:
-    operands.emplace_back(Instruction::Register(fields.rd));
-    operands.emplace_back(Instruction::Register(fields.rs1));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractITypeImmediate(raw))));
-    break;
+    return extractITypeOperands(fields, raw);
 
   // Store: rs1, rs2, offset
   case Instruction::Opcode::SB:
   case Instruction::Opcode::SH:
   case Instruction::Opcode::SW:
   case Instruction::Opcode::SD:
-    operands.emplace_back(Instruction::Register(fields.rs1));
-    operands.emplace_back(Instruction::Register(fields.rs2));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractSTypeImmediate(raw))));
-    break;
+    return {Instruction::Register(fields.rs1),
+            Instruction::Register(fields.rs2),
+            Instruction::Immediate(
+                static_cast<int64_t>(extractSTypeImmediate(raw)))};
 
   // Branch: rs1, rs2, offset
   case Instruction::Opcode::BEQ:
@@ -287,37 +277,32 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::BGE:
   case Instruction::Opcode::BLTU:
   case Instruction::Opcode::BGEU:
-    operands.emplace_back(Instruction::Register(fields.rs1));
-    operands.emplace_back(Instruction::Register(fields.rs2));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractBTypeImmediate(raw))));
-    break;
+    return {Instruction::Register(fields.rs1),
+            Instruction::Register(fields.rs2),
+            Instruction::Immediate(
+                static_cast<int64_t>(extractBTypeImmediate(raw)))};
 
   // U-type: rd, imm
   case Instruction::Opcode::LUI:
   case Instruction::Opcode::AUIPC:
-    operands.emplace_back(Instruction::Register(fields.rd));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractUTypeImmediate(raw))));
-    break;
+    return {Instruction::Register(fields.rd),
+            Instruction::Immediate(
+                static_cast<int64_t>(extractUTypeImmediate(raw)))};
 
   // J-type: rd, offset
   case Instruction::Opcode::JAL:
-    operands.emplace_back(Instruction::Register(fields.rd));
-    operands.emplace_back(Instruction::Immediate(
-        static_cast<int64_t>(extractJTypeImmediate(raw))));
-    break;
+    return {Instruction::Register(fields.rd),
+            Instruction::Immediate(
+                static_cast<int64_t>(extractJTypeImmediate(raw)))};
 
   // System: no operands
   case Instruction::Opcode::ECALL:
   case Instruction::Opcode::EBREAK:
-    break;
+    return {};
 
   case Instruction::Opcode::INVALID:
     throw std::runtime_error("Cannot extract operands for invalid instruction");
   }
-
-  return operands;
 }
 
 int32_t Decoder::extractITypeImmediate(uint32_t raw) const {
@@ -351,6 +336,14 @@ int32_t Decoder::extractJTypeImmediate(uint32_t raw) const {
   imm |= ((raw >> 20) & 0x1) << 11;  // imm[11]
   imm |= ((raw >> 21) & 0x3FF) << 1; // imm[10:1]
   return signExtend(imm, 21);
+}
+
+uint32_t Decoder::readInstructionFromMemory(const uint8_t *data,
+                                            size_t offset) {
+  return static_cast<uint32_t>(data[offset]) |
+         (static_cast<uint32_t>(data[offset + 1]) << 8) |
+         (static_cast<uint32_t>(data[offset + 2]) << 16) |
+         (static_cast<uint32_t>(data[offset + 3]) << 24);
 }
 
 } // namespace riscv

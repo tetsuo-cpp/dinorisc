@@ -32,8 +32,8 @@ bool BinaryTranslator::executeProgram(const std::string &inputPath) {
   std::vector<riscv::Instruction> instructions;
   for (size_t i = 0; i < numInstructions; ++i) {
     uint64_t pc = textBaseAddress + (i * 4);
-    uint32_t rawInst = decoder->readInstruction(textSectionData.data(), i * 4);
-    riscv::Instruction inst = decoder->decode(rawInst, pc);
+    riscv::Instruction inst =
+        decoder->decode(textSectionData.data(), i * 4, pc);
     instructions.push_back(inst);
   }
 
@@ -93,11 +93,6 @@ bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
     return false;
   }
 
-  if (!elfReader->isValidRISCV64()) {
-    std::cerr << "Error: Not a valid RISC-V 64-bit executable" << std::endl;
-    return false;
-  }
-
   // Get entry point and text section
   entryPoint = elfReader->getEntryPoint();
   const auto &textSection = elfReader->getTextSection();
@@ -129,8 +124,8 @@ bool BinaryTranslator::executeWithDBT() {
   // uint64_t currentPC = entryPoint;
   // while (executing) {
   //   size_t offset = (currentPC - textBaseAddress);
-  //   uint32_t rawInst = decoder->readInstruction(textSectionData.data(),
-  //   offset); riscv::Instruction inst = decoder->decode(rawInst, currentPC);
+  //   riscv::Instruction inst = decoder->decode(textSectionData.data(), offset,
+  //   currentPC);
   //   // Translate and execute instruction...
   // }
 

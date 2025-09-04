@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
+#include <elfio/elfio.hpp>
 #include <string>
 #include <vector>
 
@@ -16,10 +16,8 @@ struct TextSection {
 class ELFReader {
 public:
   ELFReader();
-  ~ELFReader();
 
   bool loadFile(const std::string &filePath);
-  bool isValidRISCV64() const;
 
   uint64_t getEntryPoint() const { return entryPoint; }
   const TextSection &getTextSection() const { return textSection; }
@@ -27,9 +25,7 @@ public:
   std::string getErrorMessage() const { return errorMessage; }
 
 private:
-  class ELFReaderImpl;
-  std::unique_ptr<ELFReaderImpl> impl;
-
+  ELFIO::elfio reader;
   uint64_t entryPoint;
   TextSection textSection;
   std::string errorMessage;

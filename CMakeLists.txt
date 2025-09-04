@@ -20,7 +20,7 @@ include_directories(${CMAKE_SOURCE_DIR}/third_party/elfio)
 option(DINORISC_ENABLE_TESTING "Enable testing" ON)
 if(DINORISC_ENABLE_TESTING)
   enable_testing()
-  add_subdirectory(third_party/catch2)
+  add_subdirectory(third_party/Catch2)
 endif()
 
 # Add format target for C++ and Python files

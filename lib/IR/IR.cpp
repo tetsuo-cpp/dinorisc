@@ -22,14 +22,12 @@ std::string Instruction::toString() const {
              << typeToString(inst.type) << " %" << inst.lhs << ", %"
              << inst.rhs;
         } else if constexpr (std::is_same_v<T, Sext>) {
-          ss << "sext " << typeToString(inst.fromType) << " to "
-             << typeToString(inst.toType) << " %" << inst.operand;
+          ss << "sext to " << typeToString(inst.toType) << " %" << inst.operand;
         } else if constexpr (std::is_same_v<T, Zext>) {
-          ss << "zext " << typeToString(inst.fromType) << " to "
-             << typeToString(inst.toType) << " %" << inst.operand;
+          ss << "zext to " << typeToString(inst.toType) << " %" << inst.operand;
         } else if constexpr (std::is_same_v<T, Trunc>) {
-          ss << "trunc " << typeToString(inst.fromType) << " to "
-             << typeToString(inst.toType) << " %" << inst.operand;
+          ss << "trunc to " << typeToString(inst.toType) << " %"
+             << inst.operand;
         } else if constexpr (std::is_same_v<T, Load>) {
           ss << "load " << typeToString(inst.type) << " %" << inst.address;
         } else if constexpr (std::is_same_v<T, Store>) {
@@ -52,8 +50,8 @@ std::string Terminator::toString() const {
           ss << "condbr %" << term.condition << ", bb" << term.trueBlock
              << ", bb" << term.falseBlock;
         } else if constexpr (std::is_same_v<T, Return>) {
-          if (term.hasValue) {
-            ss << "ret %" << term.value;
+          if (term.value) {
+            ss << "ret %" << *term.value;
           } else {
             ss << "ret";
           }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -56,19 +57,16 @@ struct BinaryOp {
 };
 
 struct Sext {
-  Type fromType;
   Type toType;
   ValueId operand;
 };
 
 struct Zext {
-  Type fromType;
   Type toType;
   ValueId operand;
 };
 
 struct Trunc {
-  Type fromType;
   Type toType;
   ValueId operand;
 };
@@ -104,8 +102,7 @@ struct CondBranch {
 };
 
 struct Return {
-  ValueId value;
-  bool hasValue;
+  std::optional<ValueId> value;
 };
 
 using TerminatorKind = std::variant<Branch, CondBranch, Return>;

@@ -192,7 +192,6 @@ TEST_CASE("Lifter Arithmetic Instructions", "[lifter][arithmetic]") {
     auto &sextInst = block.instructions[3];
     REQUIRE(std::holds_alternative<Sext>(sextInst.kind));
     auto &sext = std::get<Sext>(sextInst.kind);
-    REQUIRE(sext.fromType == Type::i32);
     REQUIRE(sext.toType == Type::i64);
   }
 
@@ -441,7 +440,6 @@ TEST_CASE("Lifter Memory Operations", "[lifter][memory]") {
     REQUIRE(loadOp.type == Type::i16);
 
     auto &sextOp = std::get<Sext>(block.instructions[3].kind);
-    REQUIRE(sextOp.fromType == Type::i16);
     REQUIRE(sextOp.toType == Type::i64);
   }
 
@@ -473,7 +471,6 @@ TEST_CASE("Lifter Memory Operations", "[lifter][memory]") {
     REQUIRE(loadOp.type == Type::i32);
 
     auto &zextOp = std::get<Zext>(block.instructions[3].kind);
-    REQUIRE(zextOp.fromType == Type::i32);
     REQUIRE(zextOp.toType == Type::i64);
   }
 
@@ -505,7 +502,6 @@ TEST_CASE("Lifter Memory Operations", "[lifter][memory]") {
     for (const auto &inst : block.instructions) {
       if (std::holds_alternative<Trunc>(inst.kind)) {
         auto &trunc = std::get<Trunc>(inst.kind);
-        REQUIRE(trunc.fromType == Type::i64);
         REQUIRE(trunc.toType == Type::i32);
         foundTrunc = true;
       }

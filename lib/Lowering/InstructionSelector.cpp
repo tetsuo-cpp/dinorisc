@@ -129,9 +129,9 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
               arm64::BranchInst{arm64::Opcode::B, termKind.falseBlock};
           result.push_back(branchFalse);
         } else if constexpr (std::is_same_v<T, ir::Return>) {
-          if (termKind.hasValue) {
+          if (termKind.value) {
             // Move return value to x0
-            VirtualRegister retReg = getVirtualRegister(termKind.value);
+            VirtualRegister retReg = getVirtualRegister(*termKind.value);
             arm64::Instruction mov;
             mov.kind = arm64::TwoOperandInst{
                 arm64::Opcode::MOV, arm64::DataSize::X, arm64::Register::X0,
@@ -220,7 +220,8 @@ arm64::Instruction InstructionSelector::selectSext(const ir::Sext &sext,
   arm64::Opcode opcode;
 
   // Select appropriate sign extension instruction based on source type
-  switch (sext.fromType) {
+  ir::Type fromType = getValueType(sext.operand);
+  switch (fromType) {
   case ir::Type::i8:
     opcode = arm64::Opcode::SXTB;
     break;
@@ -252,7 +253,8 @@ arm64::Instruction InstructionSelector::selectZext(const ir::Zext &zext,
   arm64::Opcode opcode;
 
   // Select appropriate zero extension instruction based on source type
-  switch (zext.fromType) {
+  ir::Type fromType = getValueType(zext.operand);
+  switch (fromType) {
   case ir::Type::i8:
     opcode = arm64::Opcode::UXTB;
     break;

@@ -4,7 +4,7 @@
 
 namespace dinorisc {
 
-Lifter::Lifter() : nextValueId(1) {
+Lifter::Lifter() : nextValueId(1), zeroConstant(0) {
   // Initialize all registers to zero constants
   for (size_t i = 0; i < 32; ++i) {
     registerValues[i] = 0; // x0 is always zero, others start as zero
@@ -14,6 +14,10 @@ Lifter::Lifter() : nextValueId(1) {
 ir::BasicBlock
 Lifter::liftBasicBlock(const std::vector<riscv::Instruction> &instructions) {
   currentInstructions.clear();
+
+  // Create zero constant once per basic block for x0 register
+  zeroConstant = createConstant(ir::Type::i64, 0);
+
   ir::BasicBlock block;
 
   for (size_t i = 0; i < instructions.size(); ++i) {
@@ -47,267 +51,97 @@ Lifter::liftBasicBlock(const std::vector<riscv::Instruction> &instructions) {
 void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
   switch (inst.opcode) {
   // Arithmetic instructions
-  case riscv::Instruction::Opcode::ADD: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::ADD:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Add);
     break;
-  }
-  case riscv::Instruction::Opcode::ADDI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::ADDI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::Add);
     break;
-  }
-  case riscv::Instruction::Opcode::SUB: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Sub, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SUB:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Sub);
     break;
-  }
-  case riscv::Instruction::Opcode::ADDW: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId rs1_trunc = createTrunc(ir::Type::i64, ir::Type::i32, rs1);
-    ir::ValueId rs2_trunc = createTrunc(ir::Type::i64, ir::Type::i32, rs2);
-    ir::ValueId result_32 = createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i32,
-                                           rs1_trunc, rs2_trunc);
-    ir::ValueId result = createSext(ir::Type::i32, ir::Type::i64, result_32);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::ADDW:
+    liftWTypeBinaryOp(inst, ir::BinaryOpcode::Add);
     break;
-  }
-  case riscv::Instruction::Opcode::ADDIW: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i32, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId rs1_trunc = createTrunc(ir::Type::i64, ir::Type::i32, rs1);
-    ir::ValueId result_32 =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i32, rs1_trunc, imm);
-    ir::ValueId result = createSext(ir::Type::i32, ir::Type::i64, result_32);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::ADDIW:
+    liftWTypeImmOp(inst, ir::BinaryOpcode::Add);
     break;
-  }
 
   // Bitwise operations
-  case riscv::Instruction::Opcode::AND: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::And, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::AND:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::And);
     break;
-  }
-  case riscv::Instruction::Opcode::ANDI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::And, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::ANDI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::And);
     break;
-  }
-  case riscv::Instruction::Opcode::OR: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Or, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::OR:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Or);
     break;
-  }
-  case riscv::Instruction::Opcode::ORI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Or, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::ORI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::Or);
     break;
-  }
-  case riscv::Instruction::Opcode::XOR: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Xor, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::XOR:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Xor);
     break;
-  }
-  case riscv::Instruction::Opcode::XORI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Xor, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::XORI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::Xor);
     break;
-  }
 
   // Shift operations
-  case riscv::Instruction::Opcode::SLL: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Shl, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SLL:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Shl);
     break;
-  }
-  case riscv::Instruction::Opcode::SLLI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Shl, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SLLI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::Shl);
     break;
-  }
-  case riscv::Instruction::Opcode::SRL: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Shr, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SRL:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Shr);
     break;
-  }
-  case riscv::Instruction::Opcode::SRLI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Shr, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SRLI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::Shr);
     break;
-  }
-  case riscv::Instruction::Opcode::SRA: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Sar, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SRA:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Sar);
     break;
-  }
-  case riscv::Instruction::Opcode::SRAI: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Sar, ir::Type::i64, rs1, imm);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SRAI:
+    liftITypeBinaryOp(inst, ir::BinaryOpcode::Sar);
     break;
-  }
-  case riscv::Instruction::Opcode::SLLIW: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i32, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId rs1_trunc = createTrunc(ir::Type::i64, ir::Type::i32, rs1);
-    ir::ValueId result_32 =
-        createBinaryOp(ir::BinaryOpcode::Shl, ir::Type::i32, rs1_trunc, imm);
-    ir::ValueId result = createSext(ir::Type::i32, ir::Type::i64, result_32);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SLLIW:
+    liftWTypeImmOp(inst, ir::BinaryOpcode::Shl);
     break;
-  }
 
   // Comparison instructions
-  case riscv::Instruction::Opcode::SLT: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::Lt, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SLT:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::Lt);
     break;
-  }
-  case riscv::Instruction::Opcode::SLTU: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
-    ir::ValueId result =
-        createBinaryOp(ir::BinaryOpcode::LtU, ir::Type::i64, rs1, rs2);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::SLTU:
+    liftRTypeBinaryOp(inst, ir::BinaryOpcode::LtU);
     break;
-  }
 
   // Load instructions
-  case riscv::Instruction::Opcode::LB: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    ir::ValueId load8 = createLoad(ir::Type::i8, addr);
-    ir::ValueId result = createSext(ir::Type::i8, ir::Type::i64, load8);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::LB:
+    liftLoadInstruction(inst, ir::Type::i8, true);
     break;
-  }
-  case riscv::Instruction::Opcode::LH: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    ir::ValueId load16 = createLoad(ir::Type::i16, addr);
-    ir::ValueId result = createSext(ir::Type::i16, ir::Type::i64, load16);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::LH:
+    liftLoadInstruction(inst, ir::Type::i16, true);
     break;
-  }
-  case riscv::Instruction::Opcode::LD: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    ir::ValueId result = createLoad(ir::Type::i64, addr);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::LD:
+    liftLoadInstruction(inst, ir::Type::i64, false);
     break;
-  }
-  case riscv::Instruction::Opcode::LW: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    ir::ValueId load32 = createLoad(ir::Type::i32, addr);
-    ir::ValueId result = createSext(ir::Type::i32, ir::Type::i64, load32);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::LW:
+    liftLoadInstruction(inst, ir::Type::i32, true);
     break;
-  }
-  case riscv::Instruction::Opcode::LWU: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    ir::ValueId load32 = createLoad(ir::Type::i32, addr);
-    ir::ValueId result = createZext(ir::Type::i32, ir::Type::i64, load32);
-    setRegisterValue(inst.getRegister(0), result);
+  case riscv::Instruction::Opcode::LWU:
+    liftLoadInstruction(inst, ir::Type::i32, false);
     break;
-  }
 
   // Store instructions
-  case riscv::Instruction::Opcode::SD: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    createStore(rs2, addr);
+  case riscv::Instruction::Opcode::SD:
+    liftStoreInstruction(inst, ir::Type::i64);
     break;
-  }
-  case riscv::Instruction::Opcode::SW: {
-    ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
-    ir::ValueId rs2 = getRegisterValue(inst.getRegister(0));
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(2)));
-    ir::ValueId addr =
-        createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
-    ir::ValueId val32 = createTrunc(ir::Type::i64, ir::Type::i32, rs2);
-    createStore(val32, addr);
+  case riscv::Instruction::Opcode::SW:
+    liftStoreInstruction(inst, ir::Type::i32);
     break;
-  }
 
   // Upper immediate instructions
   case riscv::Instruction::Opcode::LUI: {
@@ -334,8 +168,12 @@ void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
 
 ir::ValueId Lifter::getRegisterValue(uint32_t regNum) {
   if (regNum == 0) {
-    // x0 is always zero
-    return createConstant(ir::Type::i64, 0);
+    // x0 is always zero - return cached constant
+    return zeroConstant;
+  }
+  if (registerValues[regNum] == 0) {
+    // Register not yet set, create zero constant
+    registerValues[regNum] = createConstant(ir::Type::i64, 0);
   }
   return registerValues[regNum];
 }
@@ -363,25 +201,92 @@ ir::ValueId Lifter::createStore(ir::ValueId value, ir::ValueId address) {
   return addInstruction(ir::Store{value, address});
 }
 
-ir::ValueId Lifter::createSext(ir::Type fromType, ir::Type toType,
-                               ir::ValueId operand) {
-  return addInstruction(ir::Sext{fromType, toType, operand});
+ir::ValueId Lifter::createSext(ir::Type toType, ir::ValueId operand) {
+  return addInstruction(ir::Sext{toType, operand});
 }
 
-ir::ValueId Lifter::createZext(ir::Type fromType, ir::Type toType,
-                               ir::ValueId operand) {
-  return addInstruction(ir::Zext{fromType, toType, operand});
+ir::ValueId Lifter::createZext(ir::Type toType, ir::ValueId operand) {
+  return addInstruction(ir::Zext{toType, operand});
 }
 
-ir::ValueId Lifter::createTrunc(ir::Type fromType, ir::Type toType,
-                                ir::ValueId operand) {
-  return addInstruction(ir::Trunc{fromType, toType, operand});
+ir::ValueId Lifter::createTrunc(ir::Type toType, ir::ValueId operand) {
+  return addInstruction(ir::Trunc{toType, operand});
 }
 
 ir::ValueId Lifter::addInstruction(ir::InstructionKind kind) {
   ir::ValueId valueId = nextValueId++;
   currentInstructions.push_back({valueId, kind});
   return valueId;
+}
+
+void Lifter::liftRTypeBinaryOp(const riscv::Instruction &inst,
+                               ir::BinaryOpcode opcode, ir::Type type) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+  ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
+  ir::ValueId result = createBinaryOp(opcode, type, rs1, rs2);
+  setRegisterValue(inst.getRegister(0), result);
+}
+
+void Lifter::liftITypeBinaryOp(const riscv::Instruction &inst,
+                               ir::BinaryOpcode opcode, ir::Type type) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+  ir::ValueId imm = createConstant(type, inst.getImmediate(2));
+  ir::ValueId result = createBinaryOp(opcode, type, rs1, imm);
+  setRegisterValue(inst.getRegister(0), result);
+}
+
+void Lifter::liftWTypeBinaryOp(const riscv::Instruction &inst,
+                               ir::BinaryOpcode opcode) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+  ir::ValueId rs2 = getRegisterValue(inst.getRegister(2));
+  ir::ValueId rs1_trunc = createTrunc(ir::Type::i32, rs1);
+  ir::ValueId rs2_trunc = createTrunc(ir::Type::i32, rs2);
+  ir::ValueId result_32 =
+      createBinaryOp(opcode, ir::Type::i32, rs1_trunc, rs2_trunc);
+  ir::ValueId result = createSext(ir::Type::i64, result_32);
+  setRegisterValue(inst.getRegister(0), result);
+}
+
+void Lifter::liftWTypeImmOp(const riscv::Instruction &inst,
+                            ir::BinaryOpcode opcode) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+  ir::ValueId imm = createConstant(ir::Type::i32, inst.getImmediate(2));
+  ir::ValueId rs1_trunc = createTrunc(ir::Type::i32, rs1);
+  ir::ValueId result_32 = createBinaryOp(opcode, ir::Type::i32, rs1_trunc, imm);
+  ir::ValueId result = createSext(ir::Type::i64, result_32);
+  setRegisterValue(inst.getRegister(0), result);
+}
+
+void Lifter::liftLoadInstruction(const riscv::Instruction &inst,
+                                 ir::Type loadType, bool signExtend) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(1));
+  ir::ValueId imm = createConstant(ir::Type::i64, inst.getImmediate(2));
+  ir::ValueId addr =
+      createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
+  ir::ValueId loaded = createLoad(loadType, addr);
+
+  ir::ValueId result = loaded;
+  if (loadType != ir::Type::i64) {
+    result = signExtend ? createSext(ir::Type::i64, loaded)
+                        : createZext(ir::Type::i64, loaded);
+  }
+  setRegisterValue(inst.getRegister(0), result);
+}
+
+void Lifter::liftStoreInstruction(const riscv::Instruction &inst,
+                                  ir::Type storeType) {
+  ir::ValueId rs1 = getRegisterValue(inst.getRegister(1)); // base address
+  ir::ValueId rs2 = getRegisterValue(inst.getRegister(0)); // value to store
+  ir::ValueId imm =
+      createConstant(ir::Type::i64, inst.getImmediate(2)); // offset
+  ir::ValueId addr =
+      createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, rs1, imm);
+
+  ir::ValueId val = rs2;
+  if (storeType != ir::Type::i64) {
+    val = createTrunc(storeType, rs2);
+  }
+  createStore(val, addr);
 }
 
 bool Lifter::isTerminator(const riscv::Instruction &inst) {
@@ -439,7 +344,7 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
     // For now, we'll treat JALR as a return (can be enhanced later for indirect
     // jumps)
     ir::ValueId retVal = createConstant(ir::Type::i64, 0);
-    return ir::Terminator{ir::Return{retVal, true}};
+    return ir::Terminator{ir::Return{retVal}};
   }
 
   default:

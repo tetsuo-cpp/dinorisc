@@ -39,24 +39,23 @@ public:
     instructions.push_back(inst);
   }
 
-  ir::ValueId addSext(ir::Type fromType, ir::Type toType, ir::ValueId operand) {
+  ir::ValueId addSext(ir::Type toType, ir::ValueId operand) {
     ir::ValueId valueId = nextValueId++;
-    ir::Instruction inst{valueId, ir::Sext{fromType, toType, operand}};
+    ir::Instruction inst{valueId, ir::Sext{toType, operand}};
     instructions.push_back(inst);
     return valueId;
   }
 
-  ir::ValueId addZext(ir::Type fromType, ir::Type toType, ir::ValueId operand) {
+  ir::ValueId addZext(ir::Type toType, ir::ValueId operand) {
     ir::ValueId valueId = nextValueId++;
-    ir::Instruction inst{valueId, ir::Zext{fromType, toType, operand}};
+    ir::Instruction inst{valueId, ir::Zext{toType, operand}};
     instructions.push_back(inst);
     return valueId;
   }
 
-  ir::ValueId addTrunc(ir::Type fromType, ir::Type toType,
-                       ir::ValueId operand) {
+  ir::ValueId addTrunc(ir::Type toType, ir::ValueId operand) {
     ir::ValueId valueId = nextValueId++;
-    ir::Instruction inst{valueId, ir::Trunc{fromType, toType, operand}};
+    ir::Instruction inst{valueId, ir::Trunc{toType, operand}};
     instructions.push_back(inst);
     return valueId;
   }
@@ -263,7 +262,7 @@ TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
     IRBuilder builder;
     auto value32 =
         builder.addConst(ir::Type::i32, 0xFFFFFF80); // Negative value
-    auto extended = builder.addSext(ir::Type::i32, ir::Type::i64, value32);
+    auto extended = builder.addSext(ir::Type::i64, value32);
     builder.setReturnTerminator(extended);
 
     auto result = pipeline.lower(builder.build());
@@ -276,7 +275,7 @@ TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
   SECTION("Zero extension") {
     IRBuilder builder;
     auto value16 = builder.addConst(ir::Type::i16, 0x8000);
-    auto extended = builder.addZext(ir::Type::i16, ir::Type::i64, value16);
+    auto extended = builder.addZext(ir::Type::i64, value16);
     builder.setReturnTerminator(extended);
 
     auto result = pipeline.lower(builder.build());
@@ -289,7 +288,7 @@ TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
   SECTION("Truncation") {
     IRBuilder builder;
     auto value64 = builder.addConst(ir::Type::i64, 0x123456789ABCDEF0);
-    auto truncated = builder.addTrunc(ir::Type::i64, ir::Type::i32, value64);
+    auto truncated = builder.addTrunc(ir::Type::i32, value64);
     builder.setReturnTerminator(truncated);
 
     auto result = pipeline.lower(builder.build());
@@ -423,15 +422,15 @@ TEST_CASE("Lowering pipeline complex patterns", "[lowering]") {
     auto val16 = builder.addConst(ir::Type::i16, 1000);
     auto val32 = builder.addConst(ir::Type::i32, 100000);
 
-    auto ext8to64 = builder.addZext(ir::Type::i8, ir::Type::i64, val8);
-    auto ext16to64 = builder.addSext(ir::Type::i16, ir::Type::i64, val16);
-    auto trunc32to16 = builder.addTrunc(ir::Type::i32, ir::Type::i16, val32);
+    auto ext8to64 = builder.addZext(ir::Type::i64, val8);
+    auto ext16to64 = builder.addSext(ir::Type::i64, val16);
+    auto trunc32to16 = builder.addTrunc(ir::Type::i16, val32);
 
     auto sum = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64,
                                    ext8to64, ext16to64);
-    auto finalResult = builder.addBinaryOp(
-        ir::BinaryOpcode::Add, ir::Type::i64, sum,
-        builder.addZext(ir::Type::i16, ir::Type::i64, trunc32to16));
+    auto finalResult =
+        builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, sum,
+                            builder.addZext(ir::Type::i64, trunc32to16));
     builder.setReturnTerminator(finalResult);
 
     auto result = pipeline.lower(builder.build());
@@ -507,11 +506,9 @@ TEST_CASE("Lowering pipeline edge cases", "[lowering]") {
     auto val64 = builder.addConst(ir::Type::i64, 1000000000);
 
     builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i16,
-                        builder.addZext(ir::Type::i8, ir::Type::i16, val8),
-                        val16);
+                        builder.addZext(ir::Type::i16, val8), val16);
     builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64,
-                        builder.addZext(ir::Type::i32, ir::Type::i64, val32),
-                        val64);
+                        builder.addZext(ir::Type::i64, val32), val64);
 
     builder.setVoidReturnTerminator();
 

@@ -153,8 +153,8 @@ std::string dataSizeToString(DataSize size) {
 static std::string operandToString(const Operand &operand) {
   if (std::holds_alternative<Register>(operand)) {
     return registerToString(std::get<Register>(operand));
-  } else if (std::holds_alternative<VirtualReg>(operand)) {
-    return "v" + std::to_string(std::get<VirtualReg>(operand).id);
+  } else if (std::holds_alternative<VirtualRegister>(operand)) {
+    return "v" + std::to_string(std::get<VirtualRegister>(operand));
   } else {
     return "#" + std::to_string(std::get<Immediate>(operand).value);
   }

@@ -33,15 +33,23 @@ InstructionSelector::getVirtualRegister(ir::ValueId valueId) const {
 
 VirtualRegister
 InstructionSelector::assignVirtualRegister(ir::ValueId valueId) {
-  auto it = irToVReg.find(valueId);
-  if (it != irToVReg.end()) {
-    return it->second;
+  VirtualRegister existing = getVirtualRegister(valueId);
+  if (existing != 0) {
+    return existing;
   }
 
   VirtualRegister vreg = nextVirtualReg++;
   irToVReg[valueId] = vreg;
-  vregToIR[vreg] = valueId;
   return vreg;
+}
+
+std::unordered_map<VirtualRegister, ir::ValueId>
+InstructionSelector::getVRegToIRMapping() const {
+  std::unordered_map<VirtualRegister, ir::ValueId> result;
+  for (const auto &[irId, vreg] : irToVReg) {
+    result[vreg] = irId;
+  }
+  return result;
 }
 
 void InstructionSelector::recordValueType(ir::ValueId valueId, ir::Type type) {
@@ -110,11 +118,9 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
 
           // Compare against zero
           arm64::Instruction cmp;
-          cmp.kind = arm64::ThreeOperandInst{
-              arm64::Opcode::CMP, arm64::DataSize::X,
-              arm64::VirtualReg{condReg},
-              arm64::VirtualReg{condReg}, // Compare reg with itself for now
-              arm64::Immediate{0}};
+          cmp.kind =
+              arm64::ThreeOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
+                                      condReg, arm64::Immediate{0}, condReg};
           result.push_back(cmp);
 
           // Branch if not equal (true case)
@@ -133,9 +139,9 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
             // Move return value to x0
             VirtualRegister retReg = getVirtualRegister(*termKind.value);
             arm64::Instruction mov;
-            mov.kind = arm64::TwoOperandInst{
-                arm64::Opcode::MOV, arm64::DataSize::X, arm64::Register::X0,
-                arm64::VirtualReg{retReg}};
+            mov.kind =
+                arm64::TwoOperandInst{arm64::Opcode::MOV, arm64::DataSize::X,
+                                      arm64::Register::X0, retReg};
             result.push_back(mov);
           }
 
@@ -161,10 +167,9 @@ InstructionSelector::selectBinaryOp(const ir::BinaryOp &binOp,
   VirtualRegister rhsReg = getVirtualRegister(binOp.rhs);
 
   arm64::Instruction inst;
-  inst.kind = arm64::ThreeOperandInst{
-      irBinaryOpToARM64(binOp.opcode), irTypeToDataSize(binOp.type),
-      arm64::VirtualReg{destReg}, arm64::VirtualReg{lhsReg},
-      arm64::VirtualReg{rhsReg}};
+  inst.kind = arm64::ThreeOperandInst{irBinaryOpToARM64(binOp.opcode),
+                                      irTypeToDataSize(binOp.type), destReg,
+                                      lhsReg, rhsReg};
 
   return inst;
 }
@@ -176,8 +181,7 @@ arm64::Instruction InstructionSelector::selectLoad(const ir::Load &load,
 
   arm64::Instruction inst;
   inst.kind = arm64::MemoryInst{
-      arm64::Opcode::LDR, irTypeToDataSize(load.type),
-      arm64::VirtualReg{destReg}, arm64::VirtualReg{addrReg},
+      arm64::Opcode::LDR, irTypeToDataSize(load.type), destReg, addrReg,
       0 // No offset for now
   };
 
@@ -192,8 +196,7 @@ arm64::Instruction InstructionSelector::selectStore(const ir::Store &store) {
 
   arm64::Instruction inst;
   inst.kind = arm64::MemoryInst{
-      arm64::Opcode::STR, irTypeToDataSize(valueType),
-      arm64::VirtualReg{valueReg}, arm64::VirtualReg{addrReg},
+      arm64::Opcode::STR, irTypeToDataSize(valueType), valueReg, addrReg,
       0 // No offset for now
   };
 
@@ -205,9 +208,9 @@ arm64::Instruction InstructionSelector::selectConst(const ir::Const &constInst,
   VirtualRegister destReg = assignVirtualRegister(resultId);
 
   arm64::Instruction inst;
-  inst.kind = arm64::TwoOperandInst{
-      arm64::Opcode::MOV, irTypeToDataSize(constInst.type),
-      arm64::VirtualReg{destReg}, arm64::Immediate{constInst.value}};
+  inst.kind = arm64::TwoOperandInst{arm64::Opcode::MOV,
+                                    irTypeToDataSize(constInst.type), destReg,
+                                    arm64::Immediate{constInst.value}};
 
   return inst;
 }
@@ -239,8 +242,7 @@ arm64::Instruction InstructionSelector::selectSext(const ir::Sext &sext,
 
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{opcode, irTypeToDataSize(sext.toType),
-                                    arm64::VirtualReg{destReg},
-                                    arm64::VirtualReg{srcReg}};
+                                    destReg, srcReg};
 
   return inst;
 }
@@ -273,8 +275,7 @@ arm64::Instruction InstructionSelector::selectZext(const ir::Zext &zext,
 
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{opcode, irTypeToDataSize(zext.toType),
-                                    arm64::VirtualReg{destReg},
-                                    arm64::VirtualReg{srcReg}};
+                                    destReg, srcReg};
 
   return inst;
 }
@@ -286,8 +287,7 @@ arm64::Instruction InstructionSelector::selectTrunc(const ir::Trunc &trunc,
 
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{
-      arm64::Opcode::MOV, irTypeToDataSize(trunc.toType),
-      arm64::VirtualReg{destReg}, arm64::VirtualReg{srcReg}};
+      arm64::Opcode::MOV, irTypeToDataSize(trunc.toType), destReg, srcReg};
 
   return inst;
 }

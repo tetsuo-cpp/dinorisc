@@ -1,5 +1,7 @@
 #include "RegisterAllocator.h"
 #include <algorithm>
+#include <cassert>
+#include <set>
 
 namespace dinorisc {
 namespace lowering {
@@ -26,16 +28,14 @@ bool RegisterAllocator::allocateRegisters(
   allocation.clear();
   activeIntervals.clear();
 
-  // Sort intervals by start point (should already be sorted from liveness
-  // analysis)
-  auto sortedIntervals = liveIntervals;
-  std::sort(sortedIntervals.begin(), sortedIntervals.end(),
-            [](const LiveInterval &a, const LiveInterval &b) {
-              return a.start < b.start;
-            });
+  // Debug assertion to verify input is sorted
+  assert(std::is_sorted(liveIntervals.begin(), liveIntervals.end(),
+                        [](const LiveInterval &a, const LiveInterval &b) {
+                          return a.start < b.start;
+                        }));
 
-  // Linear scan algorithm
-  for (const auto &interval : sortedIntervals) {
+  // Linear scan algorithm using pre-sorted intervals
+  for (const auto &interval : liveIntervals) {
     // Expire old intervals
     expireOldIntervals(interval.start);
 
@@ -70,16 +70,13 @@ RegisterAllocator::getPhysicalRegister(VirtualRegister vreg) const {
 }
 
 arm64::Register RegisterAllocator::getNextAvailableRegister() {
-  // Find first register not currently in use
+  std::set<arm64::Register> inUse;
+  for (const auto &active : activeIntervals) {
+    inUse.insert(active.physicalReg);
+  }
+
   for (arm64::Register reg : availableRegisters) {
-    bool inUse = false;
-    for (const auto &active : activeIntervals) {
-      if (active.physicalReg == reg) {
-        inUse = true;
-        break;
-      }
-    }
-    if (!inUse) {
+    if (inUse.find(reg) == inUse.end()) {
       return reg;
     }
   }
@@ -135,9 +132,9 @@ RegisterAllocator::replaceOperandRegister(const arm64::Operand &operand) {
   if (std::holds_alternative<arm64::Register>(operand)) {
     // Physical register - return as-is
     return operand;
-  } else if (std::holds_alternative<arm64::VirtualReg>(operand)) {
+  } else if (std::holds_alternative<VirtualRegister>(operand)) {
     // Virtual register - map to physical register
-    VirtualRegister vreg = std::get<arm64::VirtualReg>(operand).id;
+    VirtualRegister vreg = std::get<VirtualRegister>(operand);
     arm64::Register physReg = getPhysicalRegister(vreg);
     return physReg;
   }

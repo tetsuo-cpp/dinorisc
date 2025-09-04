@@ -21,16 +21,12 @@ public:
   // Get the virtual register assigned to an IR value
   VirtualRegister getVirtualRegister(ir::ValueId valueId) const;
 
-  // Get mapping from virtual registers back to IR values
-  const std::unordered_map<VirtualRegister, ir::ValueId> &
-  getVRegToIRMapping() const {
-    return vregToIR;
-  }
+  // Get mapping from virtual registers back to IR values (computed on demand)
+  std::unordered_map<VirtualRegister, ir::ValueId> getVRegToIRMapping() const;
 
 private:
   VirtualRegister nextVirtualReg;
   std::unordered_map<ir::ValueId, VirtualRegister> irToVReg;
-  std::unordered_map<VirtualRegister, ir::ValueId> vregToIR;
   std::unordered_map<ir::ValueId, ir::Type> valueTypes;
 
   // Assign a virtual register to an IR value

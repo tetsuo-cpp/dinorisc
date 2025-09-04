@@ -97,11 +97,7 @@ struct Immediate {
 
 using VirtualRegister = uint32_t;
 
-struct VirtualReg {
-  VirtualRegister id;
-};
-
-using Operand = std::variant<Register, VirtualReg, Immediate>;
+using Operand = std::variant<Register, VirtualRegister, Immediate>;
 
 struct ThreeOperandInst {
   Opcode opcode;

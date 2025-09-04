@@ -61,11 +61,11 @@ public:
   }
 
   void setReturnTerminator(ir::ValueId value) {
-    terminator = ir::Terminator{ir::Return{value, true}};
+    terminator = ir::Terminator{ir::Return{value}};
   }
 
   void setVoidReturnTerminator() {
-    terminator = ir::Terminator{ir::Return{0, false}};
+    terminator = ir::Terminator{ir::Return{std::nullopt}};
   }
 
   void setBranchTerminator(uint64_t target) {
@@ -110,7 +110,7 @@ bool hasOnlyPhysicalRegisters(
     const std::vector<arm64::Instruction> &instructions) {
   for (const auto &inst : instructions) {
     const auto checkOperand = [](const arm64::Operand &operand) {
-      return !std::holds_alternative<arm64::VirtualReg>(operand);
+      return !std::holds_alternative<arm64::VirtualRegister>(operand);
     };
 
     bool hasVirtualReg = std::visit(
@@ -125,6 +125,8 @@ bool hasOnlyPhysicalRegisters(
           } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
             return !checkOperand(instKind.reg) ||
                    !checkOperand(instKind.baseReg);
+          } else if constexpr (std::is_same_v<T, arm64::BranchInst>) {
+            return false; // BranchInst has no operands, so no virtual registers
           } else {
             return false;
           }

@@ -4,7 +4,7 @@
 
 namespace dinorisc {
 
-Lifter::Lifter() : nextValueId(1), zeroConstant(0) {
+Lifter::Lifter() : nextValueId(1) {
   // Initialize all registers to zero constants
   for (size_t i = 0; i < 32; ++i) {
     registerValues[i] = 0; // x0 is always zero, others start as zero
@@ -14,9 +14,6 @@ Lifter::Lifter() : nextValueId(1), zeroConstant(0) {
 ir::BasicBlock
 Lifter::liftBasicBlock(const std::vector<riscv::Instruction> &instructions) {
   currentInstructions.clear();
-
-  // Create zero constant once per basic block for x0 register
-  zeroConstant = createConstant(ir::Type::i64, 0);
 
   ir::BasicBlock block;
 
@@ -168,12 +165,8 @@ void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
 
 ir::ValueId Lifter::getRegisterValue(uint32_t regNum) {
   if (regNum == 0) {
-    // x0 is always zero - return cached constant
-    return zeroConstant;
-  }
-  if (registerValues[regNum] == 0) {
-    // Register not yet set, create zero constant
-    registerValues[regNum] = createConstant(ir::Type::i64, 0);
+    // x0 is always zero
+    return createConstant(ir::Type::i64, 0);
   }
   return registerValues[regNum];
 }

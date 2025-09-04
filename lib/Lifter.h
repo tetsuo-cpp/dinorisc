@@ -28,9 +28,6 @@ private:
   // Map RISC-V registers (x0-x31) to current IR value IDs
   std::array<ir::ValueId, 32> registerValues;
 
-  // Cached zero constant for x0 register
-  ir::ValueId zeroConstant;
-
   // Helper methods for creating IR instructions
   ir::ValueId createConstant(ir::Type type, uint64_t value);
   ir::ValueId createBinaryOp(ir::BinaryOpcode opcode, ir::Type type,

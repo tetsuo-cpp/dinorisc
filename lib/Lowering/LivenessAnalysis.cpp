@@ -156,8 +156,8 @@ std::set<uint32_t> LivenessAnalysis::getDefinedVirtualRegisters(
 
 std::optional<uint32_t> LivenessAnalysis::getVirtualRegisterFromOperand(
     const arm64::Operand &operand) const {
-  if (std::holds_alternative<arm64::VirtualReg>(operand)) {
-    return std::get<arm64::VirtualReg>(operand).id;
+  if (std::holds_alternative<arm64::VirtualRegister>(operand)) {
+    return std::get<arm64::VirtualRegister>(operand);
   }
   return std::nullopt;
 }

@@ -6,8 +6,8 @@ add_executable(DecoderTest
 )
 
 # Link with DinoRISCLib and Catch2
-target_link_libraries(DecoderTest 
-  PRIVATE 
+target_link_libraries(DecoderTest
+  PRIVATE
   DinoRISCLib
   Catch2::Catch2WithMain
 )
@@ -21,11 +21,26 @@ add_executable(LifterTest
 )
 
 # Link with DinoRISCLib and Catch2
-target_link_libraries(LifterTest 
-  PRIVATE 
+target_link_libraries(LifterTest
+  PRIVATE
   DinoRISCLib
   Catch2::Catch2WithMain
 )
 
 # Add the test to CTest
 add_test(NAME LifterUnitTest COMMAND LifterTest)
+
+# Create test executable for Lowering Pipeline
+add_executable(LoweringPipelineTest
+  LoweringPipelineTest.cpp
+)
+
+# Link with DinoRISCLib and Catch2
+target_link_libraries(LoweringPipelineTest
+  PRIVATE
+  DinoRISCLib
+  Catch2::Catch2WithMain
+)
+
+# Add the test to CTest
+add_test(NAME LoweringPipelineUnitTest COMMAND LoweringPipelineTest)

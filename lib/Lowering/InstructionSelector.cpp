@@ -92,6 +92,11 @@ InstructionSelector::selectInstruction(const ir::Instruction &inst) {
         } else if constexpr (std::is_same_v<T, ir::Trunc>) {
           recordValueType(inst.valueId, instKind.toType);
           result.push_back(selectTrunc(instKind, inst.valueId));
+        } else if constexpr (std::is_same_v<T, ir::RegRead>) {
+          recordValueType(inst.valueId, ir::Type::i64);
+          result.push_back(selectRegRead(instKind, inst.valueId));
+        } else if constexpr (std::is_same_v<T, ir::RegWrite>) {
+          result.push_back(selectRegWrite(instKind));
         }
       },
       inst.kind);
@@ -288,6 +293,41 @@ arm64::Instruction InstructionSelector::selectTrunc(const ir::Trunc &trunc,
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{
       arm64::Opcode::MOV, irTypeToDataSize(trunc.toType), destReg, srcReg};
+
+  return inst;
+}
+
+arm64::Instruction
+InstructionSelector::selectRegRead(const ir::RegRead &regRead,
+                                   ir::ValueId resultId) {
+  VirtualRegister destReg = assignVirtualRegister(resultId);
+
+  // Load from guest state: reg_value = guestState->x[regNumber]
+  // We assume x0 contains pointer to guest state
+  // Calculate offset: regNumber * 8 (since each register is 64-bit)
+  int32_t offset = static_cast<int32_t>(regRead.regNumber * 8);
+
+  arm64::Instruction inst;
+  inst.kind = arm64::MemoryInst{arm64::Opcode::LDR, arm64::DataSize::X, destReg,
+                                arm64::Register::X0, // Guest state pointer
+                                offset};
+
+  return inst;
+}
+
+arm64::Instruction
+InstructionSelector::selectRegWrite(const ir::RegWrite &regWrite) {
+  VirtualRegister valueReg = getVirtualRegister(regWrite.value);
+
+  // Store to guest state: guestState->x[regNumber] = value
+  // Calculate offset: regNumber * 8 (since each register is 64-bit)
+  int32_t offset = static_cast<int32_t>(regWrite.regNumber * 8);
+
+  arm64::Instruction inst;
+  inst.kind =
+      arm64::MemoryInst{arm64::Opcode::STR, arm64::DataSize::X, valueReg,
+                        arm64::Register::X0, // Guest state pointer
+                        offset};
 
   return inst;
 }

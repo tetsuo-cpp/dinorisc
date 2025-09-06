@@ -83,6 +83,11 @@ void BinaryTranslator::initializeTranslator() {
   lifter = std::make_unique<Lifter>();
   instructionSelector = std::make_unique<lowering::InstructionSelector>();
   registerAllocator = std::make_unique<lowering::RegisterAllocator>();
+  encoder = std::make_unique<arm64::Encoder>();
+  executionEngine = std::make_unique<ExecutionEngine>();
+
+  // Initialize guest state with entry point
+  guestState.pc = 0; // Will be set when loading binary
 }
 
 bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
@@ -111,24 +116,36 @@ bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
 bool BinaryTranslator::executeWithDBT() {
   std::cout << "\nStarting dynamic binary translation and execution..."
             << std::endl;
-  std::cout << "DBT engine not yet implemented" << std::endl;
 
-  // TODO: Implement the following:
-  // 1. Create a virtual CPU state (registers, memory)
-  // 2. Set up translation cache for ARM64 code blocks
-  // 3. Implement basic block detection and translation using on-demand decoding
-  // 4. Execute translated ARM64 code with runtime support
-  // 5. Handle system calls, exceptions, and memory management
-  //
-  // Example on-demand decoding during execution:
-  // uint64_t currentPC = entryPoint;
-  // while (executing) {
-  //   size_t offset = (currentPC - textBaseAddress);
-  //   riscv::Instruction inst = decoder->decode(textSectionData.data(), offset,
-  //   currentPC);
-  //   // Translate and execute instruction...
-  // }
+  // Initialize guest state with entry point
+  guestState.pc = entryPoint;
 
+  // Simple execution loop - execute one basic block at a time
+  uint64_t currentPC = entryPoint;
+  int maxBlocks = 10; // Limit execution for testing
+  int blockCount = 0;
+
+  while (blockCount < maxBlocks && currentPC != 0) {
+    std::cout << "Executing block " << blockCount << " at PC=0x" << std::hex
+              << currentPC << std::dec << std::endl;
+
+    // Update guest state PC
+    guestState.pc = currentPC;
+
+    // Execute one basic block
+    uint64_t nextPC = executeBlock(currentPC);
+
+    if (nextPC == 0) {
+      std::cout << "Execution completed or failed" << std::endl;
+      break;
+    }
+
+    currentPC = nextPC;
+    blockCount++;
+  }
+
+  std::cout << "DBT execution finished after " << blockCount << " blocks"
+            << std::endl;
   return true;
 }
 
@@ -167,6 +184,83 @@ BinaryTranslator::translateToARM64(const ir::BasicBlock &irBlock) {
   }
 
   return arm64Instructions;
+}
+
+std::vector<uint8_t> BinaryTranslator::encodeToMachineCode(
+    const std::vector<arm64::Instruction> &instructions) {
+  std::vector<uint8_t> machineCode;
+
+  for (const auto &instruction : instructions) {
+    auto encoded = encoder->encodeInstruction(instruction);
+    machineCode.insert(machineCode.end(), encoded.begin(), encoded.end());
+  }
+
+  return machineCode;
+}
+
+uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
+  // Check if PC is within text section bounds
+  if (pc < textBaseAddress || pc >= textBaseAddress + textSectionData.size()) {
+    std::cerr << "PC out of bounds: 0x" << std::hex << pc << std::dec
+              << std::endl;
+    return 0;
+  }
+
+  // Decode instructions starting from PC until we hit a terminator
+  std::vector<riscv::Instruction> blockInstructions;
+  size_t offset = pc - textBaseAddress;
+  uint64_t currentPC = pc;
+
+  while (offset < textSectionData.size()) {
+    riscv::Instruction inst =
+        decoder->decode(textSectionData.data(), offset, currentPC);
+    if (!inst.isValid()) {
+      std::cerr << "Invalid instruction at PC=0x" << std::hex << currentPC
+                << std::dec << std::endl;
+      break;
+    }
+
+    blockInstructions.push_back(inst);
+
+    // Check if this is a terminator instruction
+    if (lifter->isTerminator(inst)) {
+      break;
+    }
+
+    offset += 4;
+    currentPC += 4;
+  }
+
+  if (blockInstructions.empty()) {
+    std::cerr << "No instructions decoded for block at PC=0x" << std::hex << pc
+              << std::dec << std::endl;
+    return 0;
+  }
+
+  // Lift to IR
+  std::cout << "  Lifting " << blockInstructions.size() << " instructions to IR"
+            << std::endl;
+  ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
+
+  // Translate to ARM64
+  std::cout << "  Translating IR to ARM64" << std::endl;
+  auto arm64Instructions = translateToARM64(irBlock);
+
+  // Encode to machine code
+  std::cout << "  Encoding to machine code" << std::endl;
+  auto machineCode = encodeToMachineCode(arm64Instructions);
+
+  if (machineCode.empty()) {
+    std::cerr << "Failed to encode machine code" << std::endl;
+    return 0;
+  }
+
+  // Execute the block
+  std::cout << "  Executing " << machineCode.size() << " bytes of machine code"
+            << std::endl;
+  uint64_t nextPC = executionEngine->executeBlock(machineCode, &guestState);
+
+  return nextPC;
 }
 
 } // namespace dinorisc

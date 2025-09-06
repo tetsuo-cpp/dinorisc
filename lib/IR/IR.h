@@ -81,8 +81,17 @@ struct Store {
   ValueId address;
 };
 
-using InstructionKind =
-    std::variant<Const, BinaryOp, Sext, Zext, Trunc, Load, Store>;
+struct RegRead {
+  uint32_t regNumber;
+};
+
+struct RegWrite {
+  uint32_t regNumber;
+  ValueId value;
+};
+
+using InstructionKind = std::variant<Const, BinaryOp, Sext, Zext, Trunc, Load,
+                                     Store, RegRead, RegWrite>;
 
 struct Instruction {
   ValueId valueId;

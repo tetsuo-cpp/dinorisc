@@ -53,6 +53,9 @@ private:
   arm64::Instruction selectSext(const ir::Sext &sext, ir::ValueId resultId);
   arm64::Instruction selectZext(const ir::Zext &zext, ir::ValueId resultId);
   arm64::Instruction selectTrunc(const ir::Trunc &trunc, ir::ValueId resultId);
+  arm64::Instruction selectRegRead(const ir::RegRead &regRead,
+                                   ir::ValueId resultId);
+  arm64::Instruction selectRegWrite(const ir::RegWrite &regWrite);
 
   // Convert IR types to ARM64 data sizes
   arm64::DataSize irTypeToDataSize(ir::Type type) const;

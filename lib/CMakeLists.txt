@@ -1,6 +1,7 @@
 set(DINORISC_LIB_SOURCES
   BinaryTranslator.cpp
   ELFReader.cpp
+  ExecutionEngine.cpp
   Lifter.cpp
   RISCV/Decoder.cpp
   RISCV/Instruction.cpp
@@ -15,6 +16,8 @@ set(DINORISC_LIB_SOURCES
 set(DINORISC_LIB_HEADERS
   BinaryTranslator.h
   ELFReader.h
+  ExecutionEngine.h
+  GuestState.h
   Lifter.h
   RISCV/Decoder.h
   RISCV/Instruction.h

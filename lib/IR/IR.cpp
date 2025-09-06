@@ -7,8 +7,9 @@ namespace ir {
 std::string Instruction::toString() const {
   std::stringstream ss;
 
-  // Store instructions don't produce values
-  if (!std::holds_alternative<Store>(kind)) {
+  // Store and RegWrite instructions don't produce values
+  if (!std::holds_alternative<Store>(kind) &&
+      !std::holds_alternative<RegWrite>(kind)) {
     ss << "%" << valueId << " = ";
   }
 
@@ -32,6 +33,10 @@ std::string Instruction::toString() const {
           ss << "load " << typeToString(inst.type) << " %" << inst.address;
         } else if constexpr (std::is_same_v<T, Store>) {
           ss << "store %" << inst.value << ", %" << inst.address;
+        } else if constexpr (std::is_same_v<T, RegRead>) {
+          ss << "regread x" << inst.regNumber;
+        } else if constexpr (std::is_same_v<T, RegWrite>) {
+          ss << "regwrite x" << inst.regNumber << ", %" << inst.value;
         }
         return ss.str();
       },

@@ -1,6 +1,8 @@
 #include "BinaryTranslator.h"
 #include <iomanip>
 #include <iostream>
+#include <sys/mman.h>
+#include <unistd.h>
 
 namespace dinorisc {
 
@@ -8,7 +10,12 @@ BinaryTranslator::BinaryTranslator() : textBaseAddress(0), entryPoint(0) {
   initializeTranslator();
 }
 
-BinaryTranslator::~BinaryTranslator() = default;
+BinaryTranslator::~BinaryTranslator() {
+  // Clean up shadow memory
+  if (guestState.shadowMemory) {
+    munmap(guestState.shadowMemory, guestState.shadowMemorySize);
+  }
+}
 
 bool BinaryTranslator::executeProgram(const std::string &inputPath) {
   std::cout << "Loading and executing RISC-V binary: " << inputPath
@@ -88,6 +95,28 @@ void BinaryTranslator::initializeTranslator() {
 
   // Initialize guest state with entry point
   guestState.pc = 0; // Will be set when loading binary
+
+  // Allocate shadow memory for guest program (8MB)
+  const size_t shadowSize = 8 * 1024 * 1024;
+  void *shadowMem = mmap(nullptr, shadowSize, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (shadowMem == MAP_FAILED) {
+    std::cerr << "Failed to allocate shadow memory" << std::endl;
+    return;
+  }
+
+  guestState.shadowMemory = shadowMem;
+  guestState.shadowMemorySize = shadowSize;
+  guestState.guestMemoryBase = 0x80000000; // Common RISC-V memory base
+
+  // Set up initial stack pointer (x2/sp) near the top of the memory region
+  uint64_t stackTop = guestState.guestMemoryBase + shadowSize - 16;
+  guestState.x[2] = stackTop; // x2 is the stack pointer
+
+  std::cout << "Shadow memory allocated: " << shadowSize << " bytes at host "
+            << shadowMem << ", guest base 0x" << std::hex
+            << guestState.guestMemoryBase << ", stack at 0x" << stackTop
+            << std::dec << std::endl;
 }
 
 bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {

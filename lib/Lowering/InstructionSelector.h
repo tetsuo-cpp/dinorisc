@@ -46,8 +46,9 @@ private:
   // Helper functions for specific instruction types
   arm64::Instruction selectBinaryOp(const ir::BinaryOp &binOp,
                                     ir::ValueId resultId);
-  arm64::Instruction selectLoad(const ir::Load &load, ir::ValueId resultId);
-  arm64::Instruction selectStore(const ir::Store &store);
+  std::vector<arm64::Instruction> selectLoad(const ir::Load &load,
+                                             ir::ValueId resultId);
+  std::vector<arm64::Instruction> selectStore(const ir::Store &store);
   arm64::Instruction selectConst(const ir::Const &constInst,
                                  ir::ValueId resultId);
   arm64::Instruction selectSext(const ir::Sext &sext, ir::ValueId resultId);

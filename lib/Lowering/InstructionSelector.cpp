@@ -1,4 +1,6 @@
 #include "InstructionSelector.h"
+#include "../GuestState.h"
+#include <cstddef>
 
 namespace dinorisc {
 namespace lowering {
@@ -77,9 +79,11 @@ InstructionSelector::selectInstruction(const ir::Instruction &inst) {
           result.push_back(selectBinaryOp(instKind, inst.valueId));
         } else if constexpr (std::is_same_v<T, ir::Load>) {
           recordValueType(inst.valueId, instKind.type);
-          result.push_back(selectLoad(instKind, inst.valueId));
+          auto loadInsts = selectLoad(instKind, inst.valueId);
+          result.insert(result.end(), loadInsts.begin(), loadInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Store>) {
-          result.push_back(selectStore(instKind));
+          auto storeInsts = selectStore(instKind);
+          result.insert(result.end(), storeInsts.begin(), storeInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Const>) {
           recordValueType(inst.valueId, instKind.type);
           result.push_back(selectConst(instKind, inst.valueId));
@@ -179,33 +183,115 @@ InstructionSelector::selectBinaryOp(const ir::BinaryOp &binOp,
   return inst;
 }
 
-arm64::Instruction InstructionSelector::selectLoad(const ir::Load &load,
-                                                   ir::ValueId resultId) {
+std::vector<arm64::Instruction>
+InstructionSelector::selectLoad(const ir::Load &load, ir::ValueId resultId) {
+  std::vector<arm64::Instruction> result;
+
   VirtualRegister destReg = assignVirtualRegister(resultId);
-  VirtualRegister addrReg = getVirtualRegister(load.address);
+  VirtualRegister guestAddrReg = getVirtualRegister(load.address);
 
-  arm64::Instruction inst;
-  inst.kind = arm64::MemoryInst{
-      arm64::Opcode::LDR, irTypeToDataSize(load.type), destReg, addrReg,
-      0 // No offset for now
-  };
+  // Allocate temporary register for address translation
+  VirtualRegister tempReg = nextVirtualReg++;
 
-  return inst;
+  // Address translation sequence:
+  // Load guest base from GuestState (X0 is GuestState pointer)
+  // Load shadow base from GuestState
+  // temp = guest_addr - guest_base
+  // host_addr = temp + shadow_base
+
+  VirtualRegister guestBaseReg = nextVirtualReg++;
+  VirtualRegister shadowBaseReg = nextVirtualReg++;
+
+  // LDR guestBaseReg, [x0, #guestMemoryBase_offset]
+  arm64::Instruction loadGuestBase;
+  loadGuestBase.kind = arm64::MemoryInst{
+      arm64::Opcode::LDR, arm64::DataSize::X, guestBaseReg, arm64::Register::X0,
+      static_cast<int32_t>(offsetof(GuestState, guestMemoryBase))};
+  result.push_back(loadGuestBase);
+
+  // LDR shadowBaseReg, [x0, #shadowMemory_offset]
+  arm64::Instruction loadShadowBase;
+  loadShadowBase.kind = arm64::MemoryInst{
+      arm64::Opcode::LDR, arm64::DataSize::X, shadowBaseReg,
+      arm64::Register::X0,
+      static_cast<int32_t>(offsetof(GuestState, shadowMemory))};
+  result.push_back(loadShadowBase);
+
+  // SUB temp, guest_addr, guestBaseReg
+  arm64::Instruction sub;
+  sub.kind = arm64::ThreeOperandInst{arm64::Opcode::SUB, arm64::DataSize::X,
+                                     tempReg, guestAddrReg, guestBaseReg};
+  result.push_back(sub);
+
+  // ADD temp, temp, shadowBaseReg
+  arm64::Instruction add;
+  add.kind = arm64::ThreeOperandInst{arm64::Opcode::ADD, arm64::DataSize::X,
+                                     tempReg, tempReg, shadowBaseReg};
+  result.push_back(add);
+
+  // LDR dest, [temp]
+  arm64::Instruction ldr;
+  ldr.kind = arm64::MemoryInst{arm64::Opcode::LDR, irTypeToDataSize(load.type),
+                               destReg, tempReg, 0};
+  result.push_back(ldr);
+
+  return result;
 }
 
-arm64::Instruction InstructionSelector::selectStore(const ir::Store &store) {
-  VirtualRegister valueReg = getVirtualRegister(store.value);
-  VirtualRegister addrReg = getVirtualRegister(store.address);
+std::vector<arm64::Instruction>
+InstructionSelector::selectStore(const ir::Store &store) {
+  std::vector<arm64::Instruction> result;
 
+  VirtualRegister valueReg = getVirtualRegister(store.value);
+  VirtualRegister guestAddrReg = getVirtualRegister(store.address);
   ir::Type valueType = getValueType(store.value);
 
-  arm64::Instruction inst;
-  inst.kind = arm64::MemoryInst{
-      arm64::Opcode::STR, irTypeToDataSize(valueType), valueReg, addrReg,
-      0 // No offset for now
-  };
+  // Allocate temporary register for address translation
+  VirtualRegister tempReg = nextVirtualReg++;
 
-  return inst;
+  // Address translation sequence:
+  // Load guest base from GuestState (X0 is GuestState pointer)
+  // Load shadow base from GuestState
+  // temp = guest_addr - guest_base
+  // host_addr = temp + shadow_base
+
+  VirtualRegister guestBaseReg = nextVirtualReg++;
+  VirtualRegister shadowBaseReg = nextVirtualReg++;
+
+  // LDR guestBaseReg, [x0, #guestMemoryBase_offset]
+  arm64::Instruction loadGuestBase;
+  loadGuestBase.kind = arm64::MemoryInst{
+      arm64::Opcode::LDR, arm64::DataSize::X, guestBaseReg, arm64::Register::X0,
+      static_cast<int32_t>(offsetof(GuestState, guestMemoryBase))};
+  result.push_back(loadGuestBase);
+
+  // LDR shadowBaseReg, [x0, #shadowMemory_offset]
+  arm64::Instruction loadShadowBase;
+  loadShadowBase.kind = arm64::MemoryInst{
+      arm64::Opcode::LDR, arm64::DataSize::X, shadowBaseReg,
+      arm64::Register::X0,
+      static_cast<int32_t>(offsetof(GuestState, shadowMemory))};
+  result.push_back(loadShadowBase);
+
+  // SUB temp, guest_addr, guestBaseReg
+  arm64::Instruction sub;
+  sub.kind = arm64::ThreeOperandInst{arm64::Opcode::SUB, arm64::DataSize::X,
+                                     tempReg, guestAddrReg, guestBaseReg};
+  result.push_back(sub);
+
+  // ADD temp, temp, shadowBaseReg
+  arm64::Instruction add;
+  add.kind = arm64::ThreeOperandInst{arm64::Opcode::ADD, arm64::DataSize::X,
+                                     tempReg, tempReg, shadowBaseReg};
+  result.push_back(add);
+
+  // STR value, [temp]
+  arm64::Instruction str;
+  str.kind = arm64::MemoryInst{arm64::Opcode::STR, irTypeToDataSize(valueType),
+                               valueReg, tempReg, 0};
+  result.push_back(str);
+
+  return result;
 }
 
 arm64::Instruction InstructionSelector::selectConst(const ir::Const &constInst,

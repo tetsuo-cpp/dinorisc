@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace dinorisc {
@@ -11,8 +12,14 @@ struct GuestState {
   // Program counter
   uint64_t pc;
 
+  // Shadow memory for guest program's stack and data
+  void *shadowMemory;
+  size_t shadowMemorySize;
+  uint64_t guestMemoryBase;
+
   // Constructor that initializes state
-  GuestState() : pc(0) {
+  GuestState()
+      : pc(0), shadowMemory(nullptr), shadowMemorySize(0), guestMemoryBase(0) {
     // Initialize all registers to 0
     // x0 is hardwired to zero in RISC-V
     for (int i = 0; i < 32; ++i) {

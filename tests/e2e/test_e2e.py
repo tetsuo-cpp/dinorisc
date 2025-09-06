@@ -65,6 +65,7 @@ class TestDinoRISCDecoding:
             "branch.c",
             "function.c",
             "memory.c",
+            "stack_test.c",
         ],
     )
     def test_dinorisc_decoding(self, source_file):

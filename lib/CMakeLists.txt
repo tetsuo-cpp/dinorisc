@@ -6,6 +6,7 @@ set(DINORISC_LIB_SOURCES
   RISCV/Instruction.cpp
   IR/IR.cpp
   ARM64/Instruction.cpp
+  ARM64/Encoder.cpp
   Lowering/LivenessAnalysis.cpp
   Lowering/InstructionSelector.cpp
   Lowering/RegisterAllocator.cpp
@@ -19,6 +20,7 @@ set(DINORISC_LIB_HEADERS
   RISCV/Instruction.h
   IR/IR.h
   ARM64/Instruction.h
+  ARM64/Encoder.h
   Lowering/LivenessAnalysis.h
   Lowering/InstructionSelector.h
   Lowering/RegisterAllocator.h

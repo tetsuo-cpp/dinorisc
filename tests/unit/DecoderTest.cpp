@@ -9,12 +9,10 @@ using namespace dinorisc::riscv;
 
 // Helper function to convert uint32_t to little-endian byte array
 std::vector<uint8_t> toBytes(uint32_t value) {
-  return {
-    static_cast<uint8_t>(value & 0xFF),
-    static_cast<uint8_t>((value >> 8) & 0xFF),
-    static_cast<uint8_t>((value >> 16) & 0xFF),
-    static_cast<uint8_t>((value >> 24) & 0xFF)
-  };
+  return {static_cast<uint8_t>(value & 0xFF),
+          static_cast<uint8_t>((value >> 8) & 0xFF),
+          static_cast<uint8_t>((value >> 16) & 0xFF),
+          static_cast<uint8_t>((value >> 24) & 0xFF)};
 }
 
 TEST_CASE("RV64IDecoder R-Type Instructions", "[decoder][r-type]") {

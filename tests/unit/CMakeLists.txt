@@ -44,3 +44,18 @@ target_link_libraries(LoweringPipelineTest
 
 # Add the test to CTest
 add_test(NAME LoweringPipelineUnitTest COMMAND LoweringPipelineTest)
+
+# Create test executable for ARM64 Encoder
+add_executable(EncoderTest
+  EncoderTest.cpp
+)
+
+# Link with DinoRISCLib and Catch2
+target_link_libraries(EncoderTest
+  PRIVATE
+  DinoRISCLib
+  Catch2::Catch2WithMain
+)
+
+# Add the test to CTest
+add_test(NAME EncoderUnitTest COMMAND EncoderTest)

@@ -117,32 +117,61 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
         using T = std::decay_t<decltype(termKind)>;
 
         if constexpr (std::is_same_v<T, ir::Branch>) {
-          arm64::Instruction branch;
-          branch.kind =
-              arm64::BranchInst{arm64::Opcode::B, termKind.targetBlock};
-          result.push_back(branch);
+          // Load target PC into X0 and return to dispatcher
+          arm64::Instruction movTarget;
+          movTarget.kind = arm64::TwoOperandInst{
+              arm64::Opcode::MOV, arm64::DataSize::X, arm64::Register::X0,
+              arm64::Immediate{termKind.targetBlock}};
+          result.push_back(movTarget);
+
+          arm64::Instruction ret;
+          ret.kind = arm64::TwoOperandInst{
+              arm64::Opcode::RET, arm64::DataSize::X,
+              arm64::Register::X30, // Link register
+              arm64::Register::X30 // Not used for RET but required by structure
+          };
+          result.push_back(ret);
         } else if constexpr (std::is_same_v<T, ir::CondBranch>) {
-          // Generate compare and conditional branch
+          // Use conditional select to choose target PC
           VirtualRegister condReg = getVirtualRegister(termKind.condition);
 
-          // Compare against zero
+          // Compare condition against zero
           arm64::Instruction cmp;
           cmp.kind =
               arm64::ThreeOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
                                       condReg, arm64::Immediate{0}, condReg};
           result.push_back(cmp);
 
-          // Branch if not equal (true case)
-          arm64::Instruction branchTrue;
-          branchTrue.kind =
-              arm64::BranchInst{arm64::Opcode::B_NE, termKind.trueBlock};
-          result.push_back(branchTrue);
+          // Load true target into temporary register
+          VirtualRegister trueTempReg = nextVirtualReg++;
+          arm64::Instruction movTrue;
+          movTrue.kind = arm64::TwoOperandInst{
+              arm64::Opcode::MOV, arm64::DataSize::X, trueTempReg,
+              arm64::Immediate{termKind.trueBlock}};
+          result.push_back(movTrue);
 
-          // Fall through to false block (or explicit branch)
-          arm64::Instruction branchFalse;
-          branchFalse.kind =
-              arm64::BranchInst{arm64::Opcode::B, termKind.falseBlock};
-          result.push_back(branchFalse);
+          // Load false target into temporary register
+          VirtualRegister falseTempReg = nextVirtualReg++;
+          arm64::Instruction movFalse;
+          movFalse.kind = arm64::TwoOperandInst{
+              arm64::Opcode::MOV, arm64::DataSize::X, falseTempReg,
+              arm64::Immediate{termKind.falseBlock}};
+          result.push_back(movFalse);
+
+          // Conditional select: choose true target if condition != 0 (NE)
+          arm64::Instruction csel;
+          csel.kind = arm64::ThreeOperandInst{
+              arm64::Opcode::CSEL, arm64::DataSize::X, arm64::Register::X0,
+              trueTempReg, falseTempReg};
+          result.push_back(csel);
+
+          arm64::Instruction ret;
+          ret.kind = arm64::TwoOperandInst{
+              arm64::Opcode::RET, arm64::DataSize::X,
+              arm64::Register::X30, // Link register
+              arm64::Register::X30 // Not used for RET but required by structure
+          };
+          result.push_back(ret);
         } else if constexpr (std::is_same_v<T, ir::Return>) {
           if (termKind.value) {
             // Move return value to x0

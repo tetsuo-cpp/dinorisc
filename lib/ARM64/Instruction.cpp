@@ -118,6 +118,8 @@ std::string opcodeToString(Opcode opcode) {
     return "b.gt";
   case Opcode::B_GE:
     return "b.ge";
+  case Opcode::CSEL:
+    return "csel";
   case Opcode::SXTB:
     return "sxtb";
   case Opcode::SXTH:
@@ -130,6 +132,8 @@ std::string opcodeToString(Opcode opcode) {
     return "uxth";
   case Opcode::MOV:
     return "mov";
+  case Opcode::MOVN:
+    return "movn";
   case Opcode::RET:
     return "ret";
   }

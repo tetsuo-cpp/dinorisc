@@ -72,6 +72,9 @@ enum class Opcode {
   B_GT,
   B_GE,
 
+  // Conditional operations
+  CSEL,
+
   // Extension
   SXTB,
   SXTH,
@@ -81,6 +84,7 @@ enum class Opcode {
 
   // Other
   MOV,
+  MOVN,
   RET
 };
 

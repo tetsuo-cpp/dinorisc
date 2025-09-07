@@ -141,6 +141,20 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
               (rn << 5) | rd;
     break;
   }
+  case Opcode::CSEL: {
+    if (isImmediate(inst.src1) || isImmediate(inst.src2)) {
+      throw std::runtime_error("CSEL with immediate operands not supported");
+    }
+    // CSEL: sf 0 0 1 1 0 1 0 1 0 0 Rm cond 0 0 Rn Rd
+    // sf=bit31, bits30-21=0011010100, Rm=bits20-16, cond=bits15-12,
+    // bits11-10=00, Rn=bits9-5, Rd=bits4-0 For now, use NE condition (0001) -
+    // caller should set condition flags appropriately
+    uint32_t rm = encodeRegister(inst.src2);
+    uint32_t cond = 0b0001; // NE condition
+    encoded = (sf << 31) | (0b0011010100 << 21) | (rm << 16) | (cond << 12) |
+              (rn << 5) | rd;
+    break;
+  }
   default:
     throw std::runtime_error("Unsupported three-operand instruction opcode");
   }
@@ -156,12 +170,32 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
   switch (inst.opcode) {
   case Opcode::MOV: {
     if (isImmediate(inst.src)) {
-      // MOV (immediate) is alias of MOVZ: sf 1 0 0 1 0 1 0 hw imm16 Rd
-      // sf=bit31, bits30-29=10, bits28-23=100101, hw=bits22-21, imm16=bits20-5,
-      // Rd=bits4-0
       uint64_t imm = std::get<Immediate>(inst.src).value;
-      if (imm <= 0xFFFF) {
-        uint32_t hw = 1; // Shift left by 16 for the test value 0x1234
+
+      // Check if this is a small negative value that can be encoded with MOVN
+      // Small negative values have all upper bits set (0xFFFF0000 to 0xFFFFFFFF
+      // for 64-bit)
+      bool isSmallNegative = false;
+      uint16_t movnImm = 0;
+
+      if ((imm >> 16) == 0xFFFFFFFFFFFFULL) {
+        // Bits 63:16 are all 1s, so this could be encoded with MOVN
+        uint16_t lowBits = imm & 0xFFFF;
+        movnImm = ~lowBits; // The value we'd need to NOT to get the low bits
+        isSmallNegative = true;
+      }
+
+      if (isSmallNegative) {
+        // Use MOVN: Result = ~(movnImm << 0)
+        // MOVN encoding: sf 1 0 0 1 0 1 0 hw imm16 Rd (bit 30=0 for MOVN vs 1
+        // for MOVZ)
+        uint32_t hw = 0;
+        encoded = (sf << 31) | (0b00100101 << 23) | (hw << 21) |
+                  ((movnImm & 0xFFFF) << 5) | rd;
+      } else if (imm <= 0xFFFF) {
+        // Positive value that fits in 16 bits, use MOVZ
+        // MOVZ encoding: sf 1 0 0 1 0 1 0 hw imm16 Rd
+        uint32_t hw = 0; // No shift for small values
         encoded = (sf << 31) | (0b10100101 << 23) | (hw << 21) |
                   ((imm & 0xFFFF) << 5) | rd;
       } else {
@@ -229,6 +263,21 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
       uint32_t rn = encodeRegister(inst.src);
       encoded = 0xD6400000 | (rn << 5);
     }
+    break;
+  }
+  case Opcode::MOVN: {
+    if (!isImmediate(inst.src)) {
+      throw std::runtime_error("MOVN only supports immediate operands");
+    }
+    // MOVN encoding: sf 1 0 0 1 0 1 0 hw imm16 Rd (bit 30=0)
+    // Result = ~(imm16 << (hw*16))
+    uint64_t imm = std::get<Immediate>(inst.src).value;
+    if (imm > 0xFFFF) {
+      throw std::runtime_error("MOVN immediate value too large (>16 bits)");
+    }
+    uint32_t hw = 0; // No shift for now
+    encoded = (sf << 31) | (0b00100101 << 23) | (hw << 21) |
+              ((imm & 0xFFFF) << 5) | rd;
     break;
   }
   default:

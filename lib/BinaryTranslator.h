@@ -24,6 +24,13 @@ public:
 
   bool executeProgram(const std::string &inputPath);
 
+  // Execute specific function and return the exit code from register a0 (x10)
+  int executeFunction(const std::string &inputPath,
+                      const std::string &functionName);
+
+  // Set up initial register state for function arguments
+  void setArgumentRegisters(const std::vector<uint64_t> &args);
+
 private:
   std::unique_ptr<ELFReader> elfReader;
   std::unique_ptr<riscv::Decoder> decoder;
@@ -50,6 +57,12 @@ private:
 
   // Execute a single basic block
   uint64_t executeBlock(uint64_t pc);
+
+  // Check if execution should terminate (e.g., invalid PC, system call)
+  bool shouldTerminate(uint64_t pc);
+
+  // Extract return value from guest state
+  int getReturnValue() const;
 
   // Current translation state
   std::vector<uint8_t> textSectionData;

@@ -3,7 +3,7 @@
 End-to-end tests for DinoRISC RISC-V binary translation tool.
 
 This test suite compiles C programs to RISC-V ELF binaries using clang
-and then feeds them to dinorisc to verify instruction decoding.
+and then feeds them to dinorisc to verify correct execution and results.
 """
 
 import os
@@ -32,8 +32,18 @@ RISCV_CFLAGS = [
 ]
 
 
-class TestDinoRISCDecoding:
-    """Test that dinorisc can decode RISC-V ELF binaries."""
+class TestDinoRISCExecution:
+    """Test that dinorisc can execute RISC-V ELF binaries and produce correct results."""
+
+    # Test cases with expected return values
+    TEST_CASES = {
+        "add.c": 15,  # 5 + 10 = 15
+        "function.c": 10,  # 3 + 7 = 10
+        "loop.c": 45,  # sum of 0-9 = 45
+        "branch.c": 14,  # 7 * 2 = 14 (since 7 > 5)
+        "memory.c": 15,  # 1+2+3+4+5 = 15
+        "stack_test.c": 30,  # 10 + 20 = 30
+    }
 
     def setup_method(self):
         """Ensure dinorisc binary exists."""
@@ -58,31 +68,30 @@ class TestDinoRISCDecoding:
         return output_path
 
     @pytest.mark.parametrize(
-        "source_file",
-        [
-            "add.c",
-            "loop.c",
-            "branch.c",
-            "function.c",
-            "memory.c",
-            "stack_test.c",
-        ],
+        "source_file,expected_return",
+        list(TEST_CASES.items()),
     )
-    def test_dinorisc_decoding(self, source_file):
-        """Test that dinorisc can successfully process compiled RISC-V binaries."""
+    def test_dinorisc_execution(self, source_file, expected_return):
+        """Test that dinorisc correctly executes RISC-V binaries and produces expected results."""
         elf_path = None
         try:
             # Compile source to RISC-V ELF
             elf_path = self.compile_sample(source_file)
 
-            # Run dinorisc on the ELF file
-            cmd = [str(DINORISC_BIN), elf_path]
-            result = subprocess.run(cmd, capture_output=False, text=True, timeout=30)
+            # Run dinorisc with main function to get actual return value
+            cmd = [str(DINORISC_BIN), elf_path, "main"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
-            # dinorisc should run successfully (exit code 0)
+            # Check that execution succeeded
             assert (
-                result.returncode == 0
-            ), f"dinorisc failed on {source_file}: {result.stderr}"
+                result.returncode != 1
+            ), f"dinorisc execution failed on {source_file}: {result.stderr}"
+
+            # The return code should be the program's return value
+            actual_return = result.returncode
+            assert (
+                actual_return == expected_return
+            ), f"Expected {source_file} to return {expected_return}, but got {actual_return}"
 
         finally:
             if elf_path and os.path.exists(elf_path):

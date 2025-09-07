@@ -129,6 +129,20 @@ bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
 
   // Get entry point and text section
   entryPoint = elfReader->getEntryPoint();
+
+  // If entry point is 0, try to use main function address
+  if (entryPoint == 0) {
+    uint64_t mainAddr = elfReader->getMainAddress();
+    if (mainAddr != 0) {
+      entryPoint = mainAddr;
+      std::cout << "Entry point was 0, using main function at 0x" << std::hex
+                << mainAddr << std::dec << std::endl;
+    } else {
+      std::cerr << "Warning: Entry point is 0 and no main symbol found"
+                << std::endl;
+    }
+  }
+
   const auto &textSection = elfReader->getTextSection();
 
   std::cout << "Text section: VA=0x" << std::hex << textSection.virtualAddress
@@ -151,10 +165,11 @@ bool BinaryTranslator::executeWithDBT() {
 
   // Simple execution loop - execute one basic block at a time
   uint64_t currentPC = entryPoint;
-  int maxBlocks = 10; // Limit execution for testing
+  int maxBlocks = 1000; // Increased limit for real execution
   int blockCount = 0;
 
-  while (blockCount < maxBlocks && currentPC != 0) {
+  while (blockCount < maxBlocks && currentPC != 0 &&
+         !shouldTerminate(currentPC)) {
     std::cout << "Executing block " << blockCount << " at PC=0x" << std::hex
               << currentPC << std::dec << std::endl;
 
@@ -290,6 +305,73 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   uint64_t nextPC = executionEngine->executeBlock(machineCode, &guestState);
 
   return nextPC;
+}
+
+int BinaryTranslator::executeFunction(const std::string &inputPath,
+                                      const std::string &functionName) {
+  if (!loadRISCVBinary(inputPath)) {
+    return -1;
+  }
+
+  // Get function address
+  uint64_t functionAddr = elfReader->getFunctionAddress(functionName);
+  if (functionAddr == 0) {
+    std::cerr << "Function '" << functionName << "' not found in binary"
+              << std::endl;
+    return -1;
+  }
+
+  std::cout << "Executing function '" << functionName << "' at address 0x"
+            << std::hex << functionAddr << std::dec << std::endl;
+
+  // Initialize guest state with function address
+  guestState.pc = functionAddr;
+
+  // Execute until completion or error
+  uint64_t currentPC = functionAddr;
+  int maxBlocks = 10000; // Large limit for real programs
+  int blockCount = 0;
+
+  while (blockCount < maxBlocks && currentPC != 0 &&
+         !shouldTerminate(currentPC)) {
+    guestState.pc = currentPC;
+    uint64_t nextPC = executeBlock(currentPC);
+
+    if (nextPC == 0) {
+      break;
+    }
+
+    currentPC = nextPC;
+    blockCount++;
+  }
+
+  // Return the value from register a0 (x10) - RISC-V return value register
+  return static_cast<int>(getReturnValue());
+}
+
+void BinaryTranslator::setArgumentRegisters(const std::vector<uint64_t> &args) {
+  // Set up RISC-V calling convention arguments in a0-a7 (x10-x17)
+  for (size_t i = 0; i < args.size() && i < 8; ++i) {
+    guestState.writeRegister(10 + i, args[i]);
+  }
+}
+
+bool BinaryTranslator::shouldTerminate(uint64_t pc) {
+  // Check if PC is out of bounds (program has exited)
+  if (pc < textBaseAddress || pc >= textBaseAddress + textSectionData.size()) {
+    return true;
+  }
+
+  // For now, simple bounds check. Could add other termination conditions:
+  // - System calls
+  // - Special exit instructions
+  // - Infinite loop detection
+  return false;
+}
+
+int BinaryTranslator::getReturnValue() const {
+  // In RISC-V calling convention, return value is in register a0 (x10)
+  return static_cast<int>(guestState.readRegister(10));
 }
 
 } // namespace dinorisc

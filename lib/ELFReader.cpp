@@ -69,4 +69,39 @@ bool ELFReader::loadFile(const std::string &filePath) {
   return true;
 }
 
+uint64_t ELFReader::getMainAddress() const {
+  return getFunctionAddress("main");
+}
+
+uint64_t ELFReader::getFunctionAddress(const std::string &functionName) const {
+  if (!loaded) {
+    return 0;
+  }
+
+  // Look for function symbol in symbol table
+  for (const auto &sec : reader.sections) {
+    if (sec->get_type() == ELFIO::SHT_SYMTAB ||
+        sec->get_type() == ELFIO::SHT_DYNSYM) {
+      ELFIO::symbol_section_accessor symbols(reader, sec.get());
+
+      for (ELFIO::Elf_Xword i = 0; i < symbols.get_symbols_num(); ++i) {
+        std::string name;
+        ELFIO::Elf64_Addr value;
+        ELFIO::Elf_Xword size;
+        unsigned char bind, type, other;
+        ELFIO::Elf_Half section;
+
+        if (symbols.get_symbol(i, name, value, size, bind, type, section,
+                               other)) {
+          if (name == functionName) {
+            return value;
+          }
+        }
+      }
+    }
+  }
+
+  return 0;
+}
+
 } // namespace dinorisc

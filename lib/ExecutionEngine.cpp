@@ -70,6 +70,14 @@ void *ExecutionEngine::allocateExecutableMemory(
   // Copy machine code to executable memory
   std::memcpy(memory, machineCode.data(), machineCode.size());
 
+  // Change permissions to read+execute (remove write)
+  if (mprotect(memory, allocSize, PROT_READ | PROT_EXEC) != 0) {
+    std::cerr << "ExecutionEngine: Failed to set execute permissions"
+              << std::endl;
+    munmap(memory, allocSize);
+    return nullptr;
+  }
+
   // Track the allocation
   allocatedRegions.push_back({memory, allocSize});
 
@@ -88,12 +96,12 @@ void ExecutionEngine::setupMemoryProtection() {
 }
 
 void *ExecutionEngine::allocateExecutablePage(size_t size) {
-  // Allocate memory with read, write, and execute permissions
-  void *memory = mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+  // Allocate memory with read and write permissions first
+  void *memory = mmap(nullptr, size, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
   if (memory == MAP_FAILED) {
-    std::cerr << "ExecutionEngine: mmap failed for executable memory"
+    std::cerr << "ExecutionEngine: mmap failed for writable memory"
               << std::endl;
     return nullptr;
   }

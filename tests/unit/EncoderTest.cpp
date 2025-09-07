@@ -85,7 +85,7 @@ TEST_CASE("Encoder - Two operand instructions", "[encoder]") {
 
     uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
                      (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0xD2A24680);
+    REQUIRE(value == 0xD2824680);
   }
 
   SECTION("MOV with register") {

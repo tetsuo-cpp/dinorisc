@@ -325,7 +325,12 @@ TEST_CASE("Lowering pipeline control flow", "[lowering]") {
 
     REQUIRE(!result.empty());
     REQUIRE(hasOnlyPhysicalRegisters(result));
-    REQUIRE(containsOpcode(result, arm64::Opcode::B));
+
+    // Branch instructions are now handled by the dispatcher, not the lowering
+    // pipeline The lowering pipeline should just generate the prologue/epilogue
+    // for the block
+    REQUIRE(containsOpcode(result, arm64::Opcode::MOV)); // Block setup
+    REQUIRE(containsOpcode(result, arm64::Opcode::RET)); // Block return
   }
 }
 

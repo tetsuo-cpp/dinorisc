@@ -328,9 +328,25 @@ arm64::Instruction InstructionSelector::selectConst(const ir::Const &constInst,
   VirtualRegister destReg = assignVirtualRegister(resultId);
 
   arm64::Instruction inst;
-  inst.kind = arm64::TwoOperandInst{arm64::Opcode::MOV,
-                                    irTypeToDataSize(constInst.type), destReg,
-                                    arm64::Immediate{constInst.value}};
+
+  // Check if this is a small negative value that can be encoded with MOVN
+  if (constInst.value < 0 && constInst.value >= -65536) {
+    // Use MOVN: Result = ~imm16, so imm16 = ~value
+    uint64_t movnImm = static_cast<uint64_t>(~constInst.value);
+    inst.kind = arm64::TwoOperandInst{arm64::Opcode::MOVN,
+                                      irTypeToDataSize(constInst.type), destReg,
+                                      arm64::Immediate{movnImm}};
+  } else if (constInst.value >= 0 && constInst.value <= 0xFFFF) {
+    // Use MOV for small positive values
+    inst.kind = arm64::TwoOperandInst{
+        arm64::Opcode::MOV, irTypeToDataSize(constInst.type), destReg,
+        arm64::Immediate{static_cast<uint64_t>(constInst.value)}};
+  } else {
+    // Large constants are not supported yet - need multi-instruction sequences
+    throw std::runtime_error(
+        "Constant value too large for single instruction: " +
+        std::to_string(constInst.value));
+  }
 
   return inst;
 }

@@ -142,15 +142,13 @@ void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
 
   // Upper immediate instructions
   case riscv::Instruction::Opcode::LUI: {
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(1)) << 12);
+    ir::ValueId imm = createConstant(ir::Type::i64, inst.getImmediate(1) << 12);
     setRegisterValue(inst.getRegister(0), imm);
     break;
   }
   case riscv::Instruction::Opcode::AUIPC: {
     ir::ValueId pc = createConstant(ir::Type::i64, inst.address);
-    ir::ValueId imm = createConstant(
-        ir::Type::i64, static_cast<uint64_t>(inst.getImmediate(1)) << 12);
+    ir::ValueId imm = createConstant(ir::Type::i64, inst.getImmediate(1) << 12);
     ir::ValueId result =
         createBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, pc, imm);
     setRegisterValue(inst.getRegister(0), result);
@@ -177,7 +175,7 @@ void Lifter::setRegisterValue(uint32_t regNum, ir::ValueId valueId) {
   }
 }
 
-ir::ValueId Lifter::createConstant(ir::Type type, uint64_t value) {
+ir::ValueId Lifter::createConstant(ir::Type type, int64_t value) {
   return addInstruction(ir::Const{type, value});
 }
 

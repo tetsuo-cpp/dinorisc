@@ -46,7 +46,7 @@ enum class BinaryOpcode {
 
 struct Const {
   Type type;
-  uint64_t value;
+  int64_t value;
 };
 
 struct BinaryOp {

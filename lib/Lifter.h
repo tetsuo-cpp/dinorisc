@@ -29,7 +29,7 @@ private:
   std::array<ir::ValueId, 32> registerValues;
 
   // Helper methods for creating IR instructions
-  ir::ValueId createConstant(ir::Type type, uint64_t value);
+  ir::ValueId createConstant(ir::Type type, int64_t value);
   ir::ValueId createBinaryOp(ir::BinaryOpcode opcode, ir::Type type,
                              ir::ValueId lhs, ir::ValueId rhs);
   ir::ValueId createLoad(ir::Type type, ir::ValueId address);

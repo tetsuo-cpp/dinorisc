@@ -11,7 +11,7 @@ class IRBuilder {
 public:
   IRBuilder() : nextValueId(1) {}
 
-  ir::ValueId addConst(ir::Type type, uint64_t value) {
+  ir::ValueId addConst(ir::Type type, int64_t value) {
     ir::ValueId valueId = nextValueId++;
     ir::Instruction inst{valueId, ir::Const{type, value}};
     instructions.push_back(inst);

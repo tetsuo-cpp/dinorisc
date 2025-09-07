@@ -17,73 +17,6 @@ BinaryTranslator::~BinaryTranslator() {
   }
 }
 
-bool BinaryTranslator::executeProgram(const std::string &inputPath) {
-  std::cout << "Loading and executing RISC-V binary: " << inputPath
-            << std::endl;
-
-  // Step 1: Load RISC-V ELF binary
-  if (!loadRISCVBinary(inputPath)) {
-    return false;
-  }
-
-  std::cout << "Loaded text section: " << textSectionData.size() << " bytes"
-            << std::endl;
-  std::cout << "Entry point: 0x" << std::hex << entryPoint << std::dec
-            << std::endl;
-
-  // Print all instructions and their IR lifting
-  std::cout << "\nLifting instructions to IR basic blocks:" << std::endl;
-  size_t numInstructions = textSectionData.size() / 4;
-
-  // Decode all instructions first
-  std::vector<riscv::Instruction> instructions;
-  for (size_t i = 0; i < numInstructions; ++i) {
-    uint64_t pc = textBaseAddress + (i * 4);
-    riscv::Instruction inst =
-        decoder->decode(textSectionData.data(), i * 4, pc);
-    instructions.push_back(inst);
-  }
-
-  // Process instructions in basic blocks
-  size_t blockNum = 0;
-  for (size_t i = 0; i < instructions.size();) {
-    std::vector<riscv::Instruction> blockInstructions;
-    size_t blockStart = i;
-
-    // Collect instructions until we hit a terminator
-    while (i < instructions.size()) {
-      blockInstructions.push_back(instructions[i]);
-      if (lifter->isTerminator(instructions[i])) {
-        i++;
-        break;
-      }
-      i++;
-    }
-
-    // Print the basic block
-    std::cout << "Basic Block " << blockNum++ << ":" << std::endl;
-    for (size_t j = 0; j < blockInstructions.size(); ++j) {
-      std::cout << "  [" << (blockStart + j)
-                << "] RISC-V: " << blockInstructions[j].toString() << std::endl;
-    }
-
-    // Lift to IR basic block and print
-    ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
-    std::cout << "  IR Block: " << irBlock.toString() << std::endl;
-
-    // Translate IR block to ARM64
-    auto arm64Instructions = translateToARM64(irBlock);
-    std::cout << std::endl;
-  }
-
-  // Step 2: Start dynamic binary translation and execution
-  if (!executeWithDBT()) {
-    return false;
-  }
-
-  return true;
-}
-
 void BinaryTranslator::initializeTranslator() {
   elfReader = std::make_unique<ELFReader>();
   decoder = std::make_unique<riscv::Decoder>();
@@ -153,43 +86,6 @@ bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
   textSectionData = textSection.data;
   textBaseAddress = textSection.virtualAddress;
 
-  return true;
-}
-
-bool BinaryTranslator::executeWithDBT() {
-  std::cout << "\nStarting dynamic binary translation and execution..."
-            << std::endl;
-
-  // Initialize guest state with entry point
-  guestState.pc = entryPoint;
-
-  // Simple execution loop - execute one basic block at a time
-  uint64_t currentPC = entryPoint;
-  int maxBlocks = 1000; // Increased limit for real execution
-  int blockCount = 0;
-
-  while (blockCount < maxBlocks && currentPC != 0 &&
-         !shouldTerminate(currentPC)) {
-    std::cout << "Executing block " << blockCount << " at PC=0x" << std::hex
-              << currentPC << std::dec << std::endl;
-
-    // Update guest state PC
-    guestState.pc = currentPC;
-
-    // Execute one basic block
-    uint64_t nextPC = executeBlock(currentPC);
-
-    if (nextPC == 0) {
-      std::cout << "Execution completed or failed" << std::endl;
-      break;
-    }
-
-    currentPC = nextPC;
-    blockCount++;
-  }
-
-  std::cout << "DBT execution finished after " << blockCount << " blocks"
-            << std::endl;
   return true;
 }
 
@@ -313,6 +209,10 @@ int BinaryTranslator::executeFunction(const std::string &inputPath,
     return -1;
   }
 
+  std::cout << "Text section: VA=0x" << std::hex << textBaseAddress
+            << " Size=" << std::dec << textSectionData.size() << " bytes"
+            << std::endl;
+
   // Get function address
   uint64_t functionAddr = elfReader->getFunctionAddress(functionName);
   if (functionAddr == 0) {
@@ -323,6 +223,51 @@ int BinaryTranslator::executeFunction(const std::string &inputPath,
 
   std::cout << "Executing function '" << functionName << "' at address 0x"
             << std::hex << functionAddr << std::dec << std::endl;
+
+  // Print all instructions and their IR lifting for analysis
+  std::cout << "\nLifting instructions to IR basic blocks:" << std::endl;
+  size_t numInstructions = textSectionData.size() / 4;
+
+  // Decode all instructions first
+  std::vector<riscv::Instruction> instructions;
+  for (size_t i = 0; i < numInstructions; ++i) {
+    uint64_t pc = textBaseAddress + (i * 4);
+    riscv::Instruction inst =
+        decoder->decode(textSectionData.data(), i * 4, pc);
+    instructions.push_back(inst);
+  }
+
+  // Process instructions in basic blocks for analysis
+  size_t blockNum = 0;
+  for (size_t i = 0; i < instructions.size();) {
+    std::vector<riscv::Instruction> blockInstructions;
+    size_t blockStart = i;
+
+    // Collect instructions until we hit a terminator
+    while (i < instructions.size()) {
+      blockInstructions.push_back(instructions[i]);
+      if (lifter->isTerminator(instructions[i])) {
+        i++;
+        break;
+      }
+      i++;
+    }
+
+    // Print the basic block
+    std::cout << "Basic Block " << blockNum++ << ":" << std::endl;
+    for (size_t j = 0; j < blockInstructions.size(); ++j) {
+      std::cout << "  [" << (blockStart + j)
+                << "] RISC-V: " << blockInstructions[j].toString() << std::endl;
+    }
+
+    // Lift to IR basic block and print
+    ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
+    std::cout << "  IR Block: " << irBlock.toString() << std::endl;
+
+    // Translate IR block to ARM64
+    auto arm64Instructions = translateToARM64(irBlock);
+    std::cout << std::endl;
+  }
 
   // Initialize guest state with function address
   guestState.pc = functionAddr;

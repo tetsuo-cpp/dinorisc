@@ -59,3 +59,18 @@ target_link_libraries(EncoderTest
 
 # Add the test to CTest
 add_test(NAME EncoderUnitTest COMMAND EncoderTest)
+
+# Create test executable for ExecutionEngine
+add_executable(ExecutionEngineTest
+  ExecutionEngineTest.cpp
+)
+
+# Link with DinoRISCLib and Catch2
+target_link_libraries(ExecutionEngineTest
+  PRIVATE
+  DinoRISCLib
+  Catch2::Catch2WithMain
+)
+
+# Add the test to CTest
+add_test(NAME ExecutionEngineUnitTest COMMAND ExecutionEngineTest)

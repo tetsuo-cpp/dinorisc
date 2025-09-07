@@ -213,8 +213,8 @@ TEST_CASE("Encoder - Error cases", "[encoder]") {
                           Immediate{0x1000}};
     Instruction instruction{inst};
 
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.empty());
+    REQUIRE_THROWS_AS(encoder.encodeInstruction(instruction),
+                      std::runtime_error);
   }
 
   SECTION("Virtual register should fail") {
@@ -222,7 +222,7 @@ TEST_CASE("Encoder - Error cases", "[encoder]") {
                           Register::X1, Register::X2};
     Instruction instruction{inst};
 
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.empty());
+    REQUIRE_THROWS_AS(encoder.encodeInstruction(instruction),
+                      std::runtime_error);
   }
 }

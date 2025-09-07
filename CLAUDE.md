@@ -16,6 +16,8 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
   - `RISCV/Instruction`: Represents decoded RISC-V instructions with all formats
   - `IR/`: Block-local SSA intermediate representation for translation pipeline
   - `ARM64/Instruction`: ARM64 instruction representations with opcodes and operands
+  - `ARM64/Encoder`: Generates ARM64 machine code from instruction objects
+  - `ExecutionEngine`: Runtime execution infrastructure with dispatcher-based control flow
   - `Lowering/`: Instruction selection and register allocation for ARM64 code generation
     - `InstructionSelector`: Translates SSA IR to ARM64 instructions with virtual registers
     - `LivenessAnalysis`: Computes live intervals for virtual registers within basic blocks
@@ -45,6 +47,9 @@ ninja format  # Runs clang-format on C++ files and black on Python files
 ```bash
 ninja && ctest --output-on-failure  # Run all tests
 ./bin/DecoderTest                   # Run specific unit test
+./bin/EncoderTest                   # Run ARM64 encoder unit tests
+./bin/ExecutionEngineTest           # Run execution engine unit tests
+./bin/LoweringPipelineTest          # Run lowering pipeline unit tests
 ninja test-e2e                      # Run end-to-end tests only
 ```
 

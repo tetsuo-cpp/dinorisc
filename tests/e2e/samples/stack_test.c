@@ -1,9 +1,9 @@
 // Stack operations test program for testing shadow stack implementation
 // Tests basic stack variable allocation and access
 
-int main() {
-  int a = 10;
-  int b = 20;
-  int sum = a + b;
+int stack_add(int a, int b) {
+  int local_a = a;
+  int local_b = b;
+  int sum = local_a + local_b;
   return sum;
 }

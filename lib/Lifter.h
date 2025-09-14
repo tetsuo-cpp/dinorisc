@@ -3,6 +3,8 @@
 #include "IR/IR.h"
 #include "RISCV/Instruction.h"
 #include <array>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace dinorisc {
@@ -25,8 +27,11 @@ private:
   // SSA value ID counter
   ir::ValueId nextValueId;
 
-  // Map RISC-V registers (x0-x31) to current IR value IDs
-  std::array<ir::ValueId, 32> registerValues;
+  // Track current cached values for registers within the block
+  std::unordered_map<uint32_t, ir::ValueId> cachedRegisterValues;
+
+  // Track which registers have been modified in this block
+  std::unordered_set<uint32_t> modifiedRegisters;
 
   // Helper methods for creating IR instructions
   ir::ValueId createConstant(ir::Type type, int64_t value);
@@ -46,6 +51,9 @@ private:
 
   // Helper method to add instruction to current list and return its value ID
   ir::ValueId addInstruction(ir::InstructionKind kind);
+
+  // Generate RegWrite instructions for all modified registers
+  void finalizeRegisterWrites();
 
   // Control flow helpers
   ir::Terminator liftTerminator(const riscv::Instruction &inst,

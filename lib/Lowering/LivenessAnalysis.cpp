@@ -101,8 +101,16 @@ std::set<uint32_t> LivenessAnalysis::getUsedVirtualRegisters(
             usedVRegs.insert(*vreg);
           }
         } else if constexpr (std::is_same_v<T, arm64::TwoOperandInst>) {
+          // All two-operand instructions read their src
           if (auto vreg = getVirtualRegisterFromOperand(instKind.src)) {
             usedVRegs.insert(*vreg);
+          }
+
+          // For flag-setting ops (CMP) the 'dest' operand is also read
+          if (instKind.opcode == arm64::Opcode::CMP) {
+            if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+              usedVRegs.insert(*vreg);
+            }
           }
         } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
           if (auto vreg = getVirtualRegisterFromOperand(instKind.baseReg)) {
@@ -114,6 +122,13 @@ std::set<uint32_t> LivenessAnalysis::getUsedVirtualRegisters(
             if (auto vreg = getVirtualRegisterFromOperand(instKind.reg)) {
               usedVRegs.insert(*vreg);
             }
+          }
+        } else if constexpr (std::is_same_v<T, arm64::ConditionalSelectInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.src1)) {
+            usedVRegs.insert(*vreg);
+          }
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.src2)) {
+            usedVRegs.insert(*vreg);
           }
         }
         // BranchInst doesn't use virtual registers
@@ -136,8 +151,12 @@ std::set<uint32_t> LivenessAnalysis::getDefinedVirtualRegisters(
             definedVRegs.insert(*vreg);
           }
         } else if constexpr (std::is_same_v<T, arm64::TwoOperandInst>) {
-          if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
-            definedVRegs.insert(*vreg);
+          // The destination is *defined* only when the opcode produces a value
+          // Comparison ops (CMP) do not write their first operand
+          if (instKind.opcode != arm64::Opcode::CMP) {
+            if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+              definedVRegs.insert(*vreg);
+            }
           }
         } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
           // For load instructions, the reg operand is a destination
@@ -145,6 +164,18 @@ std::set<uint32_t> LivenessAnalysis::getDefinedVirtualRegisters(
             if (auto vreg = getVirtualRegisterFromOperand(instKind.reg)) {
               definedVRegs.insert(*vreg);
             }
+          }
+        } else if constexpr (std::is_same_v<T, arm64::MoveWideInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+            definedVRegs.insert(*vreg);
+          }
+        } else if constexpr (std::is_same_v<T, arm64::ConditionalInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+            definedVRegs.insert(*vreg);
+          }
+        } else if constexpr (std::is_same_v<T, arm64::ConditionalSelectInst>) {
+          if (auto vreg = getVirtualRegisterFromOperand(instKind.dest)) {
+            definedVRegs.insert(*vreg);
           }
         }
         // BranchInst doesn't define virtual registers

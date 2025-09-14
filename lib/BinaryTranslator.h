@@ -34,9 +34,6 @@ public:
 private:
   std::unique_ptr<ELFReader> elfReader;
   std::unique_ptr<riscv::Decoder> decoder;
-  std::unique_ptr<Lifter> lifter;
-  std::unique_ptr<lowering::InstructionSelector> instructionSelector;
-  std::unique_ptr<lowering::RegisterAllocator> registerAllocator;
   std::unique_ptr<arm64::Encoder> encoder;
   std::unique_ptr<ExecutionEngine> executionEngine;
 

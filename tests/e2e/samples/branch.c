@@ -1,11 +1,10 @@
 // Simple conditional branch program for testing RISC-V instruction decoding
 // Expected instructions: conditional branches, comparisons
 
-int main() {
-  int x = 7;
+int conditional_calc(int x, int threshold) {
   int result;
 
-  if (x > 5) {
+  if (x > threshold) {
     result = x * 2;
   } else {
     result = x + 1;

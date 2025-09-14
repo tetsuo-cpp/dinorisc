@@ -20,8 +20,14 @@ std::vector<uint8_t> Encoder::encodeInstruction(const Instruction &inst) {
           encoded = encodeTwoOperandInst(instruction);
         } else if constexpr (std::is_same_v<T, MemoryInst>) {
           encoded = encodeMemoryInst(instruction);
+        } else if constexpr (std::is_same_v<T, MoveWideInst>) {
+          encoded = encodeMoveWideInst(instruction);
         } else if constexpr (std::is_same_v<T, BranchInst>) {
           encoded = encodeBranchInst(instruction);
+        } else if constexpr (std::is_same_v<T, ConditionalInst>) {
+          encoded = encodeConditionalInst(instruction);
+        } else if constexpr (std::is_same_v<T, ConditionalSelectInst>) {
+          encoded = encodeConditionalSelectInst(instruction);
         }
       },
       inst.kind);
@@ -142,18 +148,99 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
               (rn << 5) | rd;
     break;
   }
-  case Opcode::CSEL: {
-    if (isImmediate(inst.src1) || isImmediate(inst.src2)) {
-      throw std::runtime_error("CSEL with immediate operands not supported");
+  case Opcode::CMP: {
+    if (isImmediate(inst.src2)) {
+      // CMP (immediate): sf 1 1 1 0 0 0 1 0 sh imm12 Rn Rt
+      // This is SUBS with Rt=XZR (compare is subtract with result discarded)
+      // sf=bit31, bits30-29=11, bits28-23=100010, sh=bit22, imm12=bits21-10,
+      // Rn=bits9-5, Rt=bits4-0 (Rt=31 for XZR)
+      uint64_t immValue = std::get<Immediate>(inst.src2).value;
+      if (!isValidImmediate(immValue, 12))
+        throw std::runtime_error("CMP immediate value too large (>12 bits)");
+      uint32_t imm = encodeImmediate(inst.src2, 12);
+      uint32_t sh = 0;   // No shift for simple immediate
+      uint32_t xzr = 31; // XZR register
+      encoded = (sf << 31) | (0b11100010 << 23) | (sh << 22) | (imm << 10) |
+                (rn << 5) | xzr;
+    } else {
+      // CMP (shifted register): sf 1 1 0 1 0 1 1 shift 0 Rm imm6 Rn Rd
+      // This is SUBS with Rd=XZR
+      // sf=bit31, bits30-24=1101011, shift=bits23-22, bit21=0, Rm=bits20-16,
+      // imm6=bits15-10, Rn=bits9-5, Rd=bits4-0 (Rd=31 for XZR)
+      uint32_t rm = encodeRegister(inst.src2);
+      uint32_t shift = 0; // LSL
+      uint32_t imm6 = 0;  // No shift amount
+      uint32_t xzr = 31;  // XZR register
+      encoded = (sf << 31) | (0b1101011 << 24) | (shift << 22) | (rm << 16) |
+                (imm6 << 10) | (rn << 5) | xzr;
     }
-    // CSEL: sf 0 0 1 1 0 1 0 1 0 0 Rm cond 0 0 Rn Rd
-    // sf=bit31, bits30-21=0011010100, Rm=bits20-16, cond=bits15-12,
-    // bits11-10=00, Rn=bits9-5, Rd=bits4-0 For now, use NE condition (0001) -
-    // caller should set condition flags appropriately
-    uint32_t rm = encodeRegister(inst.src2);
-    uint32_t cond = 0b0001; // NE condition
-    encoded = (sf << 31) | (0b0011010100 << 21) | (rm << 16) | (cond << 12) |
-              (rn << 5) | rd;
+    break;
+  }
+  case Opcode::LSL: {
+    if (isImmediate(inst.src2)) {
+      // LSL (immediate) is alias of UBFM: sf 1 0 0 1 0 0 1 1 N immr imms Rn Rd
+      // For LSL #n: immr = (64-n) % 64 for 64-bit, (32-n) % 32 for 32-bit
+      // imms = 63-n for 64-bit, 31-n for 32-bit
+      uint64_t shiftAmount = std::get<Immediate>(inst.src2).value;
+      uint32_t datasize = (sf == 1) ? 64 : 32;
+      if (shiftAmount >= datasize)
+        throw std::runtime_error("LSL shift amount out of range");
+      uint32_t N = sf;
+      uint32_t immr = (datasize - shiftAmount) % datasize;
+      uint32_t imms = datasize - 1 - shiftAmount;
+      encoded = (sf << 31) | (0b10100110 << 23) | (N << 22) | (immr << 16) |
+                (imms << 10) | (rn << 5) | rd;
+    } else {
+      // LSL (register) is alias of LSLV: sf 0 0 1 1 0 1 0 1 1 0 Rm 0 0 1 0 0 0
+      // Rn Rd Pattern: sf 00 11010 110 Rm 001000 Rn Rd
+      uint32_t rm = encodeRegister(inst.src2);
+      encoded = (sf << 31) | (0b0011010110 << 21) | (rm << 16) |
+                (0b001000 << 10) | (rn << 5) | rd;
+    }
+    break;
+  }
+  case Opcode::LSR: {
+    if (isImmediate(inst.src2)) {
+      // LSR (immediate) is alias of UBFM: sf 1 0 0 1 0 0 1 1 N immr imms Rn Rd
+      // For LSR #n: immr = n, imms = 63 for 64-bit, 31 for 32-bit
+      uint64_t shiftAmount = std::get<Immediate>(inst.src2).value;
+      uint32_t datasize = (sf == 1) ? 64 : 32;
+      if (shiftAmount >= datasize)
+        throw std::runtime_error("LSR shift amount out of range");
+      uint32_t N = sf;
+      uint32_t immr = shiftAmount;
+      uint32_t imms = datasize - 1;
+      encoded = (sf << 31) | (0b10100110 << 23) | (N << 22) | (immr << 16) |
+                (imms << 10) | (rn << 5) | rd;
+    } else {
+      // LSR (register) is alias of LSRV: sf 0 0 1 1 0 1 0 1 1 0 Rm 0 0 1 0 Rn
+      // Rd
+      uint32_t rm = encodeRegister(inst.src2);
+      encoded = (sf << 31) | (0b00110101100 << 20) | (rm << 16) |
+                (0b0110 << 10) | (rn << 5) | rd;
+    }
+    break;
+  }
+  case Opcode::ASR: {
+    if (isImmediate(inst.src2)) {
+      // ASR (immediate) is alias of SBFM: sf 0 0 1 0 0 1 1 N immr imms Rn Rd
+      // For ASR #n: immr = n, imms = 63 for 64-bit, 31 for 32-bit
+      uint64_t shiftAmount = std::get<Immediate>(inst.src2).value;
+      uint32_t datasize = (sf == 1) ? 64 : 32;
+      if (shiftAmount >= datasize)
+        throw std::runtime_error("ASR shift amount out of range");
+      uint32_t N = sf;
+      uint32_t immr = shiftAmount;
+      uint32_t imms = datasize - 1;
+      encoded = (sf << 31) | (0b00100110 << 23) | (N << 22) | (immr << 16) |
+                (imms << 10) | (rn << 5) | rd;
+    } else {
+      // ASR (register) is alias of ASRV: sf 0 0 1 1 0 1 0 1 1 0 Rm 0 0 1 0 Rn
+      // Rd
+      uint32_t rm = encodeRegister(inst.src2);
+      encoded = (sf << 31) | (0b00110101100 << 20) | (rm << 16) |
+                (0b1010 << 10) | (rn << 5) | rd;
+    }
     break;
   }
   default:
@@ -216,7 +303,7 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     uint32_t N = sf;    // N field matches sf
     uint32_t immr = 0;  // Extract from bit 0
     uint32_t imms = 15; // Extract 16 bits (bits 15:0)
-    encoded = (sf << 31) | (0b00100110 << 24) | (N << 22) | (immr << 16) |
+    encoded = (sf << 31) | (0b00100110 << 23) | (N << 22) | (immr << 16) |
               (imms << 10) | (rn << 5) | rd;
     break;
   }
@@ -230,7 +317,7 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     uint32_t N = 1;     // Always 64-bit for SXTW
     uint32_t immr = 0;  // Extract from bit 0
     uint32_t imms = 31; // Extract 32 bits (bits 31:0)
-    encoded = (1 << 31) | (0b00100110 << 24) | (N << 22) | (immr << 16) |
+    encoded = (1 << 31) | (0b00100110 << 23) | (N << 22) | (immr << 16) |
               (imms << 10) | (rn << 5) | rd;
     break;
   }
@@ -256,6 +343,33 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     uint32_t hw = 0; // No shift for now
     encoded = (sf << 31) | (0b00100101 << 23) | (hw << 21) |
               ((imm & 0xFFFF) << 5) | rd;
+    break;
+  }
+  case Opcode::CMP: {
+    // CMP for two-operand version - dest register is ignored, src is first
+    // operand
+    uint32_t rn = encodeRegister(inst.dest); // First operand
+    if (isImmediate(inst.src)) {
+      // CMP (immediate): sf 1 1 1 0 0 0 1 0 sh imm12 Rn Rt
+      // This is SUBS with Rt=XZR (compare is subtract with result discarded)
+      uint64_t immValue = std::get<Immediate>(inst.src).value;
+      if (!isValidImmediate(immValue, 12))
+        throw std::runtime_error("CMP immediate value too large (>12 bits)");
+      uint32_t imm = encodeImmediate(inst.src, 12);
+      uint32_t sh = 0;   // No shift for simple immediate
+      uint32_t xzr = 31; // XZR register
+      encoded = (sf << 31) | (0b11100010 << 23) | (sh << 22) | (imm << 10) |
+                (rn << 5) | xzr;
+    } else {
+      // CMP (shifted register): sf 1 1 0 1 0 1 1 shift 0 Rm imm6 Rn Rd
+      // This is SUBS with Rd=XZR
+      uint32_t rm = encodeRegister(inst.src);
+      uint32_t shift = 0; // LSL
+      uint32_t imm6 = 0;  // No shift amount
+      uint32_t xzr = 31;  // XZR register
+      encoded = (sf << 31) | (0b1101011 << 24) | (shift << 22) | (rm << 16) |
+                (imm6 << 10) | (rn << 5) | xzr;
+    }
     break;
   }
   default:
@@ -379,6 +493,38 @@ uint32_t Encoder::encodeBranchInst(const BranchInst &inst) {
   return encoded;
 }
 
+uint32_t Encoder::encodeMoveWideInst(const MoveWideInst &inst) {
+  uint32_t encoded = 0;
+  uint32_t sf = getSfBit(inst.size);
+  uint32_t rd = encodeRegister(inst.dest);
+
+  // hw field encodes the shift amount: 0=LSL #0, 1=LSL #16, 2=LSL #32, 3=LSL
+  // #48
+  uint32_t hw = inst.shift / 16;
+  if (hw > 3) {
+    throw std::runtime_error("Invalid shift amount for move wide instruction");
+  }
+
+  switch (inst.opcode) {
+  case Opcode::MOVZ:
+    // MOVZ: sf 1 0 1 0 0 1 0 1 hw imm16 Rd
+    // sf=bit31, bits30-23=10100101, hw=bits22-21, imm16=bits20-5, Rd=bits4-0
+    encoded = (sf << 31) | (0b10100101 << 23) | (hw << 21) |
+              (static_cast<uint32_t>(inst.imm16) << 5) | rd;
+    break;
+  case Opcode::MOVK:
+    // MOVK: sf 1 1 1 0 0 1 0 1 hw imm16 Rd
+    // sf=bit31, bits30-23=11100101, hw=bits22-21, imm16=bits20-5, Rd=bits4-0
+    encoded = (sf << 31) | (0b11100101 << 23) | (hw << 21) |
+              (static_cast<uint32_t>(inst.imm16) << 5) | rd;
+    break;
+  default:
+    throw std::runtime_error("Unsupported move wide instruction opcode");
+  }
+
+  return encoded;
+}
+
 uint32_t Encoder::encodeRegister(const Operand &operand) {
   if (std::holds_alternative<Register>(operand)) {
     Register reg = std::get<Register>(operand);
@@ -433,6 +579,58 @@ uint32_t Encoder::getConditionCode(Opcode opcode) {
   default:
     return 0b0000;
   }
+}
+
+uint32_t Encoder::encodeConditionalInst(const ConditionalInst &inst) {
+  uint32_t encoded = 0;
+  uint32_t sf = getSfBit(inst.size);
+  uint32_t rd = encodeRegister(inst.dest);
+
+  switch (inst.opcode) {
+  case Opcode::CSET: {
+    // CSET: sf 0 0 1 1 0 1 0 1 0 0 11111 cond 0 1 11111 Rd
+    // This is actually CSINC Rd, XZR, XZR, !cond
+    // sf=bit31, bits30-21=0011010100, Rm=11111, cond=!condition,
+    // bits11-10=01, Rn=11111, Rd=bits4-0
+    uint32_t cond =
+        static_cast<uint32_t>(inst.condition) ^ 1; // Invert condition
+    encoded = (sf << 31) | (0b0011010100 << 21) | (0b11111 << 16) |
+              (cond << 12) | (0b01 << 10) | (0b11111 << 5) | rd;
+    break;
+  }
+  default:
+    throw std::runtime_error("Unsupported conditional instruction");
+  }
+
+  return encoded;
+}
+
+uint32_t
+Encoder::encodeConditionalSelectInst(const ConditionalSelectInst &inst) {
+  uint32_t encoded = 0;
+  uint32_t sf = getSfBit(inst.size);
+  uint32_t rd = encodeRegister(inst.dest);
+  uint32_t rn = encodeRegister(inst.src1);
+
+  switch (inst.opcode) {
+  case Opcode::CSEL: {
+    if (isImmediate(inst.src1) || isImmediate(inst.src2)) {
+      throw std::runtime_error("CSEL with immediate operands not supported");
+    }
+    // CSEL: sf 0 0 1 1 0 1 0 1 0 0 Rm cond 0 0 Rn Rd
+    // sf=bit31, bits30-21=0011010100, Rm=bits20-16, cond=bits15-12,
+    // bits11-10=00, Rn=bits9-5, Rd=bits4-0
+    uint32_t rm = encodeRegister(inst.src2);
+    uint32_t cond = static_cast<uint32_t>(inst.condition);
+    encoded = (sf << 31) | (0b0011010100 << 21) | (rm << 16) | (cond << 12) |
+              (rn << 5) | rd;
+    break;
+  }
+  default:
+    throw std::runtime_error("Unsupported conditional select instruction");
+  }
+
+  return encoded;
 }
 
 } // namespace arm64

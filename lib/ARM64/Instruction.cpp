@@ -120,6 +120,8 @@ std::string opcodeToString(Opcode opcode) {
     return "b.ge";
   case Opcode::CSEL:
     return "csel";
+  case Opcode::CSET:
+    return "cset";
   case Opcode::SXTB:
     return "sxtb";
   case Opcode::SXTH:
@@ -134,6 +136,10 @@ std::string opcodeToString(Opcode opcode) {
     return "mov";
   case Opcode::MOVN:
     return "movn";
+  case Opcode::MOVZ:
+    return "movz";
+  case Opcode::MOVK:
+    return "movk";
   case Opcode::RET:
     return "ret";
   }
@@ -187,14 +193,68 @@ std::string Instruction::toString() const {
             oss << ", #" << inst.offset;
           }
           oss << "]";
+        } else if constexpr (std::is_same_v<T, MoveWideInst>) {
+          oss << opcodeToString(inst.opcode) << " "
+              << operandToString(inst.dest) << ", #" << inst.imm16;
+          if (inst.shift != 0) {
+            oss << ", lsl #" << static_cast<uint32_t>(inst.shift);
+          }
         } else if constexpr (std::is_same_v<T, BranchInst>) {
           oss << opcodeToString(inst.opcode) << " 0x" << std::hex
               << inst.target;
+        } else if constexpr (std::is_same_v<T, ConditionalInst>) {
+          oss << opcodeToString(inst.opcode) << " "
+              << operandToString(inst.dest) << ", "
+              << conditionToString(inst.condition);
+        } else if constexpr (std::is_same_v<T, ConditionalSelectInst>) {
+          oss << opcodeToString(inst.opcode) << " "
+              << operandToString(inst.dest) << ", "
+              << operandToString(inst.src1) << ", "
+              << operandToString(inst.src2) << ", "
+              << conditionToString(inst.condition);
         }
       },
       kind);
 
   return oss.str();
+}
+
+std::string conditionToString(Condition condition) {
+  switch (condition) {
+  case Condition::EQ:
+    return "eq";
+  case Condition::NE:
+    return "ne";
+  case Condition::CS:
+    return "cs";
+  case Condition::CC:
+    return "cc";
+  case Condition::MI:
+    return "mi";
+  case Condition::PL:
+    return "pl";
+  case Condition::VS:
+    return "vs";
+  case Condition::VC:
+    return "vc";
+  case Condition::HI:
+    return "hi";
+  case Condition::LS:
+    return "ls";
+  case Condition::GE:
+    return "ge";
+  case Condition::LT:
+    return "lt";
+  case Condition::GT:
+    return "gt";
+  case Condition::LE:
+    return "le";
+  case Condition::AL:
+    return "al";
+  case Condition::NV:
+    return "nv";
+  }
+  return "unknown";
 }
 
 } // namespace arm64

@@ -35,15 +35,44 @@ RISCV_CFLAGS = [
 class TestDinoRISCExecution:
     """Test that dinorisc can execute RISC-V ELF binaries and produce correct results."""
 
-    # Test cases with expected return values
-    TEST_CASES = {
-        "add.c": 15,  # 5 + 10 = 15
-        "function.c": 10,  # 3 + 7 = 10
-        "loop.c": 45,  # sum of 0-9 = 45
-        "branch.c": 14,  # 7 * 2 = 14 (since 7 > 5)
-        "memory.c": 15,  # 1+2+3+4+5 = 15
-        "stack_test.c": 30,  # 10 + 20 = 30
-    }
+    # Test cases with (source_file, function_name, args, expected_return)
+    TEST_CASES = [
+        # Basic addition tests
+        ("add.c", "add", [5, 10], 15),
+        ("add.c", "add", [100, -50], 50),
+        ("add.c", "add", [0, 0], 0),
+        ("add.c", "add", [-10, -20], -30),
+        # Function call tests
+        ("function.c", "add_numbers", [3, 7], 10),
+        ("function.c", "add_numbers", [15, 25], 40),
+        ("function.c", "add_numbers", [0, 1], 1),
+        # Loop tests (sum from 0 to n-1)
+        ("loop.c", "sum_to_n", [10], 45),  # 0+1+2+...+9 = 45
+        ("loop.c", "sum_to_n", [1], 0),  # just 0
+        ("loop.c", "sum_to_n", [5], 10),  # 0+1+2+3+4 = 10
+        ("loop.c", "sum_to_n", [0], 0),  # no iterations
+        # Branch tests
+        ("branch.c", "conditional_calc", [7, 5], 14),  # 7 > 5, so 7 * 2 = 14
+        ("branch.c", "conditional_calc", [3, 5], 4),  # 3 <= 5, so 3 + 1 = 4
+        ("branch.c", "conditional_calc", [5, 5], 6),  # 5 <= 5, so 5 + 1 = 6
+        ("branch.c", "conditional_calc", [10, 8], 20),  # 10 > 8, so 10 * 2 = 20
+        # Memory/array tests
+        ("memory.c", "array_sum", [5], 15),  # 1+2+3+4+5 = 15
+        ("memory.c", "array_sum", [3], 6),  # 1+2+3 = 6
+        ("memory.c", "array_sum", [1], 1),  # just 1
+        ("memory.c", "array_sum", [10], 55),  # 1+2+...+10 = 55
+        # Stack tests
+        ("stack_test.c", "stack_add", [10, 20], 30),
+        ("stack_test.c", "stack_add", [0, 5], 5),
+        ("stack_test.c", "stack_add", [-5, 15], 10),
+        # Fibonacci tests
+        ("fibonacci.c", "fibonacci", [0], 0),  # base case
+        ("fibonacci.c", "fibonacci", [1], 1),  # base case
+        ("fibonacci.c", "fibonacci", [2], 1),  # F(2) = 1
+        ("fibonacci.c", "fibonacci", [5], 5),  # F(5) = 5
+        ("fibonacci.c", "fibonacci", [10], 55),  # F(10) = 55
+        ("fibonacci.c", "fibonacci", [15], 610),  # F(15) = 610
+    ]
 
     def setup_method(self):
         """Ensure dinorisc binary exists."""
@@ -68,30 +97,39 @@ class TestDinoRISCExecution:
         return output_path
 
     @pytest.mark.parametrize(
-        "source_file,expected_return",
-        list(TEST_CASES.items()),
+        "source_file,function_name,args,expected_return",
+        TEST_CASES,
     )
-    def test_dinorisc_execution(self, source_file, expected_return):
+    def test_dinorisc_execution(
+        self, source_file, function_name, args, expected_return
+    ):
         """Test that dinorisc correctly executes RISC-V binaries and produces expected results."""
         elf_path = None
         try:
             # Compile source to RISC-V ELF
             elf_path = self.compile_sample(source_file)
 
-            # Run dinorisc with main function to get actual return value
-            cmd = [str(DINORISC_BIN), elf_path, "main"]
+            # Run dinorisc with function name and arguments
+            cmd = [str(DINORISC_BIN), elf_path, function_name] + [
+                str(arg) for arg in args
+            ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
             # Check that execution succeeded
             assert (
-                result.returncode != 1
-            ), f"dinorisc execution failed on {source_file}: {result.stderr}"
+                result.returncode == 0
+            ), f"dinorisc execution failed on {source_file}:{function_name}({args}): {result.stderr}"
 
-            # The return code should be the program's return value
-            actual_return = result.returncode
+            # Parse the function return value from stdout
+            import re
+
+            match = re.search(r"Function \w+ returned: (-?\d+)", result.stdout)
+            assert match, f"Could not parse return value from stdout: {result.stdout}"
+
+            actual_return = int(match.group(1))
             assert (
                 actual_return == expected_return
-            ), f"Expected {source_file} to return {expected_return}, but got {actual_return}"
+            ), f"Expected {source_file}:{function_name}({args}) to return {expected_return}, but got {actual_return}"
 
         finally:
             if elf_path and os.path.exists(elf_path):

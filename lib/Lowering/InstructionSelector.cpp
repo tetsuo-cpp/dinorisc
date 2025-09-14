@@ -76,7 +76,8 @@ InstructionSelector::selectInstruction(const ir::Instruction &inst) {
 
         if constexpr (std::is_same_v<T, ir::BinaryOp>) {
           recordValueType(inst.valueId, instKind.type);
-          result.push_back(selectBinaryOp(instKind, inst.valueId));
+          auto binOpInsts = selectBinaryOp(instKind, inst.valueId);
+          result.insert(result.end(), binOpInsts.begin(), binOpInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Load>) {
           recordValueType(inst.valueId, instKind.type);
           auto loadInsts = selectLoad(instKind, inst.valueId);
@@ -86,7 +87,8 @@ InstructionSelector::selectInstruction(const ir::Instruction &inst) {
           result.insert(result.end(), storeInsts.begin(), storeInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Const>) {
           recordValueType(inst.valueId, instKind.type);
-          result.push_back(selectConst(instKind, inst.valueId));
+          auto constInsts = selectConst(instKind, inst.valueId);
+          result.insert(result.end(), constInsts.begin(), constInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Sext>) {
           recordValueType(inst.valueId, instKind.toType);
           result.push_back(selectSext(instKind, inst.valueId));
@@ -118,17 +120,19 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
 
         if constexpr (std::is_same_v<T, ir::Branch>) {
           // Load target PC into X0 and return to dispatcher
-          arm64::Instruction movTarget;
-          movTarget.kind = arm64::TwoOperandInst{
-              arm64::Opcode::MOV, arm64::DataSize::X, arm64::Register::X0,
-              arm64::Immediate{termKind.targetBlock}};
-          result.push_back(movTarget);
+          // Generate constant loading sequence directly into X0
+          ir::Const targetConst{ir::Type::i64,
+                                static_cast<int64_t>(termKind.targetBlock)};
+          auto constInsts =
+              selectConstIntoRegister(targetConst, arm64::Register::X0);
+          result.insert(result.end(), constInsts.begin(), constInsts.end());
 
           arm64::Instruction ret;
           ret.kind = arm64::TwoOperandInst{
               arm64::Opcode::RET, arm64::DataSize::X,
               arm64::Register::X30, // Link register
-              arm64::Register::X30 // Not used for RET but required by structure
+              arm64::Immediate{0}
+              // Unused immediate for structure compatibility
           };
           result.push_back(ret);
         } else if constexpr (std::is_same_v<T, ir::CondBranch>) {
@@ -138,56 +142,78 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
           // Compare condition against zero
           arm64::Instruction cmp;
           cmp.kind =
-              arm64::ThreeOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
-                                      condReg, arm64::Immediate{0}, condReg};
+              arm64::TwoOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
+                                    condReg, arm64::Immediate{0}};
           result.push_back(cmp);
 
           // Load true target into temporary register
-          VirtualRegister trueTempReg = nextVirtualReg++;
-          arm64::Instruction movTrue;
-          movTrue.kind = arm64::TwoOperandInst{
-              arm64::Opcode::MOV, arm64::DataSize::X, trueTempReg,
-              arm64::Immediate{termKind.trueBlock}};
-          result.push_back(movTrue);
+          // Create a unique IR value ID for the true target constant
+          ir::ValueId trueValueId =
+              nextVirtualReg++; // Use virtual reg as unique ID
+          VirtualRegister trueTempReg = assignVirtualRegister(trueValueId);
+          ir::Const trueConst{ir::Type::i64,
+                              static_cast<int64_t>(termKind.trueBlock)};
+          auto trueInsts = selectConst(trueConst, trueValueId);
+          result.insert(result.end(), trueInsts.begin(), trueInsts.end());
 
           // Load false target into temporary register
-          VirtualRegister falseTempReg = nextVirtualReg++;
-          arm64::Instruction movFalse;
-          movFalse.kind = arm64::TwoOperandInst{
-              arm64::Opcode::MOV, arm64::DataSize::X, falseTempReg,
-              arm64::Immediate{termKind.falseBlock}};
-          result.push_back(movFalse);
+          // Create a unique IR value ID for the false target constant
+          ir::ValueId falseValueId =
+              nextVirtualReg++; // Use virtual reg as unique ID
+          VirtualRegister falseTempReg = assignVirtualRegister(falseValueId);
+          ir::Const falseConst{ir::Type::i64,
+                               static_cast<int64_t>(termKind.falseBlock)};
+          auto falseInsts = selectConst(falseConst, falseValueId);
+          result.insert(result.end(), falseInsts.begin(), falseInsts.end());
 
           // Conditional select: choose true target if condition != 0 (NE)
+          VirtualRegister targetReg = nextVirtualReg++;
           arm64::Instruction csel;
-          csel.kind = arm64::ThreeOperandInst{
-              arm64::Opcode::CSEL, arm64::DataSize::X, arm64::Register::X0,
-              trueTempReg, falseTempReg};
+          csel.kind = arm64::ConditionalSelectInst{
+              arm64::Opcode::CSEL, arm64::DataSize::X, targetReg,
+              trueTempReg,         falseTempReg,       arm64::Condition::NE};
           result.push_back(csel);
+
+          // Move selected target to X0 for branch
+          arm64::Instruction movTarget;
+          movTarget.kind =
+              arm64::TwoOperandInst{arm64::Opcode::MOV, arm64::DataSize::X,
+                                    arm64::Register::X0, targetReg};
+          result.push_back(movTarget);
 
           arm64::Instruction ret;
           ret.kind = arm64::TwoOperandInst{
               arm64::Opcode::RET, arm64::DataSize::X,
               arm64::Register::X30, // Link register
-              arm64::Register::X30 // Not used for RET but required by structure
+              arm64::Immediate{0}
+              // Unused immediate for structure compatibility
           };
           result.push_back(ret);
         } else if constexpr (std::is_same_v<T, ir::Return>) {
-          if (termKind.value) {
-            // Move return value to x0
-            VirtualRegister retReg = getVirtualRegister(*termKind.value);
-            arm64::Instruction mov;
-            mov.kind =
-                arm64::TwoOperandInst{arm64::Opcode::MOV, arm64::DataSize::X,
-                                      arm64::Register::X0, retReg};
-            result.push_back(mov);
+          // If the return carries a value, move it into x0
+          if (termKind.value.has_value()) {
+            // Move the return value (next PC) into x0 for ARM64 return
+            VirtualRegister srcReg = getVirtualRegister(termKind.value.value());
+            arm64::Instruction moveReturn;
+            moveReturn.kind = arm64::TwoOperandInst{
+                arm64::Opcode::MOV, arm64::DataSize::X,
+                arm64::Register::X0, // ARM64 return register
+                srcReg};
+            result.push_back(moveReturn);
+          } else {
+            // Function return: make sure next-PC = 0 so the dispatcher stops
+            ir::Const zero{ir::Type::i64, 0};
+            auto zeroInsts = selectConstIntoRegister(zero, arm64::Register::X0);
+            result.insert(result.end(), zeroInsts.begin(), zeroInsts.end());
           }
 
+          // Finally emit the RET itself
           arm64::Instruction ret;
           ret.kind = arm64::TwoOperandInst{
               arm64::Opcode::RET, arm64::DataSize::X,
               arm64::Register::X30, // Link register
-              arm64::Register::X30 // Not used for RET but required by structure
+              arm64::Immediate{0}
+              // Unused immediate for structure compatibility
           };
           result.push_back(ret);
         }
@@ -197,19 +223,87 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
   return result;
 }
 
-arm64::Instruction
+std::vector<arm64::Instruction>
 InstructionSelector::selectBinaryOp(const ir::BinaryOp &binOp,
                                     ir::ValueId resultId) {
+  std::vector<arm64::Instruction> result;
   VirtualRegister destReg = assignVirtualRegister(resultId);
   VirtualRegister lhsReg = getVirtualRegister(binOp.lhs);
   VirtualRegister rhsReg = getVirtualRegister(binOp.rhs);
 
-  arm64::Instruction inst;
-  inst.kind = arm64::ThreeOperandInst{irBinaryOpToARM64(binOp.opcode),
-                                      irTypeToDataSize(binOp.type), destReg,
-                                      lhsReg, rhsReg};
+  // Check if this is a comparison operation
+  bool isComparison = false;
+  arm64::Condition condition;
 
-  return inst;
+  switch (binOp.opcode) {
+  case ir::BinaryOpcode::Eq:
+    isComparison = true;
+    condition = arm64::Condition::EQ;
+    break;
+  case ir::BinaryOpcode::Ne:
+    isComparison = true;
+    condition = arm64::Condition::NE;
+    break;
+  case ir::BinaryOpcode::Lt:
+    isComparison = true;
+    condition = arm64::Condition::LT;
+    break;
+  case ir::BinaryOpcode::Le:
+    isComparison = true;
+    condition = arm64::Condition::LE;
+    break;
+  case ir::BinaryOpcode::Gt:
+    isComparison = true;
+    condition = arm64::Condition::GT;
+    break;
+  case ir::BinaryOpcode::Ge:
+    isComparison = true;
+    condition = arm64::Condition::GE;
+    break;
+  case ir::BinaryOpcode::LtU:
+    isComparison = true;
+    condition = arm64::Condition::CC; // Unsigned less than
+    break;
+  case ir::BinaryOpcode::LeU:
+    isComparison = true;
+    condition = arm64::Condition::LS; // Unsigned less than or equal
+    break;
+  case ir::BinaryOpcode::GtU:
+    isComparison = true;
+    condition = arm64::Condition::HI; // Unsigned greater than
+    break;
+  case ir::BinaryOpcode::GeU:
+    isComparison = true;
+    condition = arm64::Condition::CS; // Unsigned greater than or equal
+    break;
+  default:
+    isComparison = false;
+    break;
+  }
+
+  if (isComparison) {
+    // Generate CMP + CSET for comparison operations
+    // CMP lhs, rhs
+    arm64::Instruction cmp;
+    cmp.kind = arm64::TwoOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
+                                     lhsReg, rhsReg};
+    result.push_back(cmp);
+
+    // CSET dest, condition
+    arm64::Instruction cset;
+    cset.kind = arm64::ConditionalInst{arm64::Opcode::CSET, arm64::DataSize::X,
+                                       destReg, condition};
+    result.push_back(cset);
+  } else {
+    // Generate regular arithmetic operation
+    arm64::Instruction inst;
+    inst.kind = arm64::ThreeOperandInst{irBinaryOpToARM64(binOp.opcode),
+                                        irTypeToDataSize(binOp.type), destReg,
+                                        lhsReg, rhsReg};
+    result.push_back(inst);
+  }
+
+  return result;
 }
 
 std::vector<arm64::Instruction>
@@ -323,32 +417,98 @@ InstructionSelector::selectStore(const ir::Store &store) {
   return result;
 }
 
-arm64::Instruction InstructionSelector::selectConst(const ir::Const &constInst,
-                                                    ir::ValueId resultId) {
+std::vector<arm64::Instruction>
+InstructionSelector::selectConst(const ir::Const &constInst,
+                                 ir::ValueId resultId) {
   VirtualRegister destReg = assignVirtualRegister(resultId);
+  return selectConstIntoRegister(constInst, destReg);
+}
 
-  arm64::Instruction inst;
+std::vector<arm64::Instruction>
+InstructionSelector::selectConstIntoRegister(const ir::Const &constInst,
+                                             arm64::Operand targetOperand) {
+  std::vector<arm64::Instruction> result;
+  arm64::DataSize dataSize = irTypeToDataSize(constInst.type);
 
   // Check if this is a small negative value that can be encoded with MOVN
   if (constInst.value < 0 && constInst.value >= -65536) {
     // Use MOVN: Result = ~imm16, so imm16 = ~value
     uint64_t movnImm = static_cast<uint64_t>(~constInst.value);
-    inst.kind = arm64::TwoOperandInst{arm64::Opcode::MOVN,
-                                      irTypeToDataSize(constInst.type), destReg,
-                                      arm64::Immediate{movnImm}};
+    arm64::Instruction inst;
+    inst.kind = arm64::TwoOperandInst{arm64::Opcode::MOVN, dataSize,
+                                      targetOperand, arm64::Immediate{movnImm}};
+    result.push_back(inst);
   } else if (constInst.value >= 0 && constInst.value <= 0xFFFF) {
     // Use MOV for small positive values
+    arm64::Instruction inst;
     inst.kind = arm64::TwoOperandInst{
-        arm64::Opcode::MOV, irTypeToDataSize(constInst.type), destReg,
+        arm64::Opcode::MOV, dataSize, targetOperand,
         arm64::Immediate{static_cast<uint64_t>(constInst.value)}};
+    result.push_back(inst);
   } else {
-    // Large constants are not supported yet - need multi-instruction sequences
-    throw std::runtime_error(
-        "Constant value too large for single instruction: " +
-        std::to_string(constInst.value));
+    // Handle large constants with MOVZ/MOVK sequence
+    uint64_t value = static_cast<uint64_t>(constInst.value);
+
+    // Extract 16-bit chunks
+    uint16_t chunk0 = static_cast<uint16_t>(value & 0xFFFF); // bits 0-15
+    uint16_t chunk1 =
+        static_cast<uint16_t>((value >> 16) & 0xFFFF); // bits 16-31
+    uint16_t chunk2 =
+        static_cast<uint16_t>((value >> 32) & 0xFFFF); // bits 32-47
+    uint16_t chunk3 =
+        static_cast<uint16_t>((value >> 48) & 0xFFFF); // bits 48-63
+
+    // Start with MOVZ for the first non-zero chunk
+    bool firstInst = true;
+
+    if (chunk0 != 0) {
+      arm64::Instruction inst;
+      inst.kind = arm64::MoveWideInst{arm64::Opcode::MOVZ, dataSize,
+                                      targetOperand, chunk0, 0};
+      result.push_back(inst);
+      firstInst = false;
+    }
+
+    if (chunk1 != 0) {
+      arm64::Opcode opcode =
+          firstInst ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
+      arm64::Instruction inst;
+      inst.kind =
+          arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk1, 16};
+      result.push_back(inst);
+      firstInst = false;
+    }
+
+    if (chunk2 != 0) {
+      arm64::Opcode opcode =
+          firstInst ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
+      arm64::Instruction inst;
+      inst.kind =
+          arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk2, 32};
+      result.push_back(inst);
+      firstInst = false;
+    }
+
+    if (chunk3 != 0) {
+      arm64::Opcode opcode =
+          firstInst ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
+      arm64::Instruction inst;
+      inst.kind =
+          arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk3, 48};
+      result.push_back(inst);
+      firstInst = false;
+    }
+
+    // If all chunks were zero, use MOVZ #0
+    if (firstInst) {
+      arm64::Instruction inst;
+      inst.kind = arm64::MoveWideInst{arm64::Opcode::MOVZ, dataSize,
+                                      targetOperand, 0, 0};
+      result.push_back(inst);
+    }
   }
 
-  return inst;
+  return result;
 }
 
 arm64::Instruction InstructionSelector::selectSext(const ir::Sext &sext,

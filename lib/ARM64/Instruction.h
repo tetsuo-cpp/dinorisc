@@ -74,6 +74,7 @@ enum class Opcode {
 
   // Conditional operations
   CSEL,
+  CSET,
 
   // Extension
   SXTB,
@@ -85,6 +86,8 @@ enum class Opcode {
   // Other
   MOV,
   MOVN,
+  MOVZ,
+  MOVK,
   RET
 };
 
@@ -93,6 +96,25 @@ enum class DataSize : uint8_t {
   H, // 16-bit
   W, // 32-bit
   X  // 64-bit
+};
+
+enum class Condition : uint8_t {
+  EQ = 0b0000, // Equal
+  NE = 0b0001, // Not equal
+  CS = 0b0010, // Carry set / unsigned higher or same
+  CC = 0b0011, // Carry clear / unsigned lower
+  MI = 0b0100, // Minus / negative
+  PL = 0b0101, // Plus / positive or zero
+  VS = 0b0110, // Overflow set
+  VC = 0b0111, // Overflow clear
+  HI = 0b1000, // Unsigned higher
+  LS = 0b1001, // Unsigned lower or same
+  GE = 0b1010, // Signed greater than or equal
+  LT = 0b1011, // Signed less than
+  GT = 0b1100, // Signed greater than
+  LE = 0b1101, // Signed less than or equal
+  AL = 0b1110, // Always
+  NV = 0b1111  // Never
 };
 
 struct Immediate {
@@ -126,13 +148,38 @@ struct MemoryInst {
   int32_t offset;
 };
 
+struct MoveWideInst {
+  Opcode opcode; // MOVZ or MOVK
+  DataSize size;
+  Operand dest;
+  uint16_t imm16; // 16-bit immediate
+  uint8_t shift;  // LSL shift amount (0, 16, 32, or 48)
+};
+
 struct BranchInst {
   Opcode opcode;
   uint64_t target;
 };
 
+struct ConditionalInst {
+  Opcode opcode;
+  DataSize size;
+  Operand dest;
+  Condition condition;
+};
+
+struct ConditionalSelectInst {
+  Opcode opcode;
+  DataSize size;
+  Operand dest;
+  Operand src1;
+  Operand src2;
+  Condition condition;
+};
+
 using InstructionKind =
-    std::variant<ThreeOperandInst, TwoOperandInst, MemoryInst, BranchInst>;
+    std::variant<ThreeOperandInst, TwoOperandInst, MemoryInst, MoveWideInst,
+                 BranchInst, ConditionalInst, ConditionalSelectInst>;
 
 struct Instruction {
   InstructionKind kind;
@@ -143,6 +190,7 @@ struct Instruction {
 std::string registerToString(Register reg);
 std::string opcodeToString(Opcode opcode);
 std::string dataSizeToString(DataSize size);
+std::string conditionToString(Condition condition);
 
 } // namespace arm64
 } // namespace dinorisc

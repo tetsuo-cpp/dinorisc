@@ -20,9 +20,6 @@ BinaryTranslator::~BinaryTranslator() {
 void BinaryTranslator::initializeTranslator() {
   elfReader = std::make_unique<ELFReader>();
   decoder = std::make_unique<riscv::Decoder>();
-  lifter = std::make_unique<Lifter>();
-  instructionSelector = std::make_unique<lowering::InstructionSelector>();
-  registerAllocator = std::make_unique<lowering::RegisterAllocator>();
   encoder = std::make_unique<arm64::Encoder>();
   executionEngine = std::make_unique<ExecutionEngine>();
 
@@ -40,11 +37,13 @@ void BinaryTranslator::initializeTranslator() {
 
   guestState.shadowMemory = shadowMem;
   guestState.shadowMemorySize = shadowSize;
-  guestState.guestMemoryBase = 0x80000000; // Common RISC-V memory base
+  guestState.guestMemoryBase =
+      0x0; // Map entire guest address space starting from 0
 
-  // Set up initial stack pointer (x2/sp) near the top of the memory region
-  uint64_t stackTop = guestState.guestMemoryBase + shadowSize - 16;
-  guestState.x[2] = stackTop; // x2 is the stack pointer
+  // Set up initial stack pointer (x2/sp) in high memory
+  // Stack grows down from high address within our shadow memory
+  uint64_t stackTop = shadowSize - 1024; // Leave some space at the top
+  guestState.x[2] = stackTop;            // x2 is the stack pointer
 
   std::cout << "Shadow memory allocated: " << shadowSize << " bytes at host "
             << shadowMem << ", guest base 0x" << std::hex
@@ -95,7 +94,8 @@ BinaryTranslator::translateToARM64(const ir::BasicBlock &irBlock) {
 
   // Step 1: Instruction Selection (IR -> ARM64)
   std::cout << "    Step 1: Instruction selection (IR -> ARM64)" << std::endl;
-  auto arm64Instructions = instructionSelector->selectInstructions(irBlock);
+  lowering::InstructionSelector instructionSelector;
+  auto arm64Instructions = instructionSelector.selectInstructions(irBlock);
   std::cout << "      Generated " << arm64Instructions.size()
             << " ARM64 instructions" << std::endl;
 
@@ -108,7 +108,8 @@ BinaryTranslator::translateToARM64(const ir::BasicBlock &irBlock) {
 
   // Step 3: Register Allocation
   std::cout << "    Step 3: Linear scan register allocation" << std::endl;
-  if (!registerAllocator->allocateRegisters(arm64Instructions, liveIntervals)) {
+  lowering::RegisterAllocator registerAllocator;
+  if (!registerAllocator.allocateRegisters(arm64Instructions, liveIntervals)) {
     std::cout << "      WARNING: Register allocation failed - using "
                  "placeholder registers"
               << std::endl;
@@ -150,6 +151,7 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   std::vector<riscv::Instruction> blockInstructions;
   size_t offset = pc - textBaseAddress;
   uint64_t currentPC = pc;
+  Lifter lifter;
 
   while (offset < textSectionData.size()) {
     riscv::Instruction inst =
@@ -163,7 +165,7 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
     blockInstructions.push_back(inst);
 
     // Check if this is a terminator instruction
-    if (lifter->isTerminator(inst)) {
+    if (lifter.isTerminator(inst)) {
       break;
     }
 
@@ -180,7 +182,7 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   // Lift to IR
   std::cout << "  Lifting " << blockInstructions.size() << " instructions to IR"
             << std::endl;
-  ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
+  ir::BasicBlock irBlock = lifter.liftBasicBlock(blockInstructions);
 
   // Translate to ARM64
   std::cout << "  Translating IR to ARM64" << std::endl;
@@ -221,56 +223,11 @@ int BinaryTranslator::executeFunction(const std::string &inputPath,
     return -1;
   }
 
-  std::cout << "Executing function '" << functionName << "' at address 0x"
-            << std::hex << functionAddr << std::dec << std::endl;
-
-  // Print all instructions and their IR lifting for analysis
-  std::cout << "\nLifting instructions to IR basic blocks:" << std::endl;
-  size_t numInstructions = textSectionData.size() / 4;
-
-  // Decode all instructions first
-  std::vector<riscv::Instruction> instructions;
-  for (size_t i = 0; i < numInstructions; ++i) {
-    uint64_t pc = textBaseAddress + (i * 4);
-    riscv::Instruction inst =
-        decoder->decode(textSectionData.data(), i * 4, pc);
-    instructions.push_back(inst);
-  }
-
-  // Process instructions in basic blocks for analysis
-  size_t blockNum = 0;
-  for (size_t i = 0; i < instructions.size();) {
-    std::vector<riscv::Instruction> blockInstructions;
-    size_t blockStart = i;
-
-    // Collect instructions until we hit a terminator
-    while (i < instructions.size()) {
-      blockInstructions.push_back(instructions[i]);
-      if (lifter->isTerminator(instructions[i])) {
-        i++;
-        break;
-      }
-      i++;
-    }
-
-    // Print the basic block
-    std::cout << "Basic Block " << blockNum++ << ":" << std::endl;
-    for (size_t j = 0; j < blockInstructions.size(); ++j) {
-      std::cout << "  [" << (blockStart + j)
-                << "] RISC-V: " << blockInstructions[j].toString() << std::endl;
-    }
-
-    // Lift to IR basic block and print
-    ir::BasicBlock irBlock = lifter->liftBasicBlock(blockInstructions);
-    std::cout << "  IR Block: " << irBlock.toString() << std::endl;
-
-    // Translate IR block to ARM64
-    auto arm64Instructions = translateToARM64(irBlock);
-    std::cout << std::endl;
-  }
-
   // Initialize guest state with function address
   guestState.pc = functionAddr;
+
+  // Initialize link register (x1) to 0 so main() returns 0 to signal completion
+  guestState.x[1] = 0;
 
   // Execute until completion or error
   uint64_t currentPC = functionAddr;

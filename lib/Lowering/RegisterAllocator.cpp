@@ -7,17 +7,18 @@ namespace dinorisc {
 namespace lowering {
 
 const std::vector<arm64::Register> RegisterAllocator::availableRegisters = {
-    arm64::Register::X0,  arm64::Register::X1,  arm64::Register::X2,
-    arm64::Register::X3,  arm64::Register::X4,  arm64::Register::X5,
-    arm64::Register::X6,  arm64::Register::X7,  arm64::Register::X8,
-    arm64::Register::X9,  arm64::Register::X10, arm64::Register::X11,
-    arm64::Register::X12, arm64::Register::X13, arm64::Register::X14,
-    arm64::Register::X15, arm64::Register::X16, arm64::Register::X17,
-    arm64::Register::X18, arm64::Register::X19, arm64::Register::X20,
-    arm64::Register::X21, arm64::Register::X22, arm64::Register::X23,
-    arm64::Register::X24, arm64::Register::X25, arm64::Register::X26,
-    arm64::Register::X27, arm64::Register::X28
-    // Note: X29 (frame pointer), X30 (link register), and SP are reserved
+    arm64::Register::X1,  arm64::Register::X2,  arm64::Register::X3,
+    arm64::Register::X4,  arm64::Register::X5,  arm64::Register::X6,
+    arm64::Register::X7,  arm64::Register::X8,  arm64::Register::X9,
+    arm64::Register::X10, arm64::Register::X11, arm64::Register::X12,
+    arm64::Register::X13, arm64::Register::X14, arm64::Register::X15,
+    arm64::Register::X16, arm64::Register::X17, arm64::Register::X18,
+    arm64::Register::X19, arm64::Register::X20, arm64::Register::X21,
+    arm64::Register::X22, arm64::Register::X23, arm64::Register::X24,
+    arm64::Register::X25, arm64::Register::X26, arm64::Register::X27,
+    arm64::Register::X28
+    // Note: X0 (GuestState pointer), X29 (frame pointer), X30 (link register),
+    // and SP are reserved
 };
 
 RegisterAllocator::RegisterAllocator() {}
@@ -120,8 +121,16 @@ void RegisterAllocator::replaceVirtualRegisters(arm64::Instruction &inst) {
         } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
           instKind.reg = replaceOperandRegister(instKind.reg);
           instKind.baseReg = replaceOperandRegister(instKind.baseReg);
+        } else if constexpr (std::is_same_v<T, arm64::MoveWideInst>) {
+          instKind.dest = replaceOperandRegister(instKind.dest);
         } else if constexpr (std::is_same_v<T, arm64::BranchInst>) {
           // No register operands to replace
+        } else if constexpr (std::is_same_v<T, arm64::ConditionalInst>) {
+          instKind.dest = replaceOperandRegister(instKind.dest);
+        } else if constexpr (std::is_same_v<T, arm64::ConditionalSelectInst>) {
+          instKind.dest = replaceOperandRegister(instKind.dest);
+          instKind.src1 = replaceOperandRegister(instKind.src1);
+          instKind.src2 = replaceOperandRegister(instKind.src2);
         }
       },
       inst.kind);

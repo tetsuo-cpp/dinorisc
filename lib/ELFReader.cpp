@@ -2,10 +2,9 @@
 
 namespace dinorisc {
 
-ELFReader::ELFReader() : entryPoint(0), loaded(false) {}
+ELFReader::ELFReader() : entryPoint(0) {}
 
 bool ELFReader::loadFile(const std::string &filePath) {
-  loaded = false;
   errorMessage.clear();
 
   if (!reader.load(filePath)) {
@@ -65,18 +64,11 @@ bool ELFReader::loadFile(const std::string &filePath) {
 
   textSection.data.assign(data, data + textSection.size);
 
-  loaded = true;
   return true;
 }
 
-uint64_t ELFReader::getMainAddress() const {
-  return getFunctionAddress("main");
-}
-
-uint64_t ELFReader::getFunctionAddress(const std::string &functionName) const {
-  if (!loaded) {
-    return 0;
-  }
+std::optional<uint64_t>
+ELFReader::getFunctionAddress(const std::string &functionName) const {
 
   // Look for function symbol in symbol table
   for (const auto &sec : reader.sections) {
@@ -101,7 +93,7 @@ uint64_t ELFReader::getFunctionAddress(const std::string &functionName) const {
     }
   }
 
-  return 0;
+  return std::nullopt;
 }
 
 } // namespace dinorisc

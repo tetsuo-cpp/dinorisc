@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <elfio/elfio.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,11 +23,9 @@ public:
   uint64_t getEntryPoint() const { return entryPoint; }
   const TextSection &getTextSection() const { return textSection; }
 
-  // Get address of main symbol, returns 0 if not found
-  uint64_t getMainAddress() const;
-
-  // Get address of any function symbol by name, returns 0 if not found
-  uint64_t getFunctionAddress(const std::string &functionName) const;
+  // Get address of any function symbol by name
+  std::optional<uint64_t>
+  getFunctionAddress(const std::string &functionName) const;
 
   std::string getErrorMessage() const { return errorMessage; }
 
@@ -35,7 +34,6 @@ private:
   uint64_t entryPoint;
   TextSection textSection;
   std::string errorMessage;
-  bool loaded;
 };
 
 } // namespace dinorisc

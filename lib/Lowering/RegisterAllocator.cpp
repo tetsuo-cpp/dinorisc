@@ -41,16 +41,16 @@ bool RegisterAllocator::allocateRegisters(
     expireOldIntervals(interval.start);
 
     // Try to find an available register
-    arm64::Register physReg = getNextAvailableRegister();
-    if (physReg == arm64::Register::XSP) { // No register available
+    auto physReg = getNextAvailableRegister();
+    if (!physReg.has_value()) { // No register available
       // For first pass, just fail - no spilling
       return false;
     }
 
     // Assign the register directly to the virtual register
     VirtualRegister vreg = interval.virtualRegister;
-    allocation[vreg] = physReg;
-    activeIntervals.push_back({interval, physReg});
+    allocation[vreg] = physReg.value();
+    activeIntervals.push_back({interval, physReg.value()});
   }
 
   // Replace virtual registers in all instructions
@@ -61,16 +61,27 @@ bool RegisterAllocator::allocateRegisters(
   return true;
 }
 
-arm64::Register
+std::optional<arm64::Register>
 RegisterAllocator::getPhysicalRegister(VirtualRegister vreg) const {
   auto it = allocation.find(vreg);
   if (it != allocation.end()) {
     return it->second;
   }
-  return arm64::Register::XSP; // Invalid/unallocated
+  return std::nullopt;
 }
 
-arm64::Register RegisterAllocator::getNextAvailableRegister() {
+arm64::Register
+RegisterAllocator::getPhysicalRegisterOrThrow(VirtualRegister vreg) const {
+  auto reg = getPhysicalRegister(vreg);
+  if (reg.has_value()) {
+    return reg.value();
+  }
+  throw std::runtime_error(
+      "No physical register assigned to virtual register " +
+      std::to_string(vreg));
+}
+
+std::optional<arm64::Register> RegisterAllocator::getNextAvailableRegister() {
   std::set<arm64::Register> inUse;
   for (const auto &active : activeIntervals) {
     inUse.insert(active.physicalReg);
@@ -82,7 +93,7 @@ arm64::Register RegisterAllocator::getNextAvailableRegister() {
     }
   }
 
-  return arm64::Register::XSP; // No available register
+  return std::nullopt; // No available register
 }
 
 bool RegisterAllocator::isRegisterAvailable(arm64::Register reg,
@@ -144,7 +155,7 @@ RegisterAllocator::replaceOperandRegister(const arm64::Operand &operand) {
   } else if (std::holds_alternative<VirtualRegister>(operand)) {
     // Virtual register - map to physical register
     VirtualRegister vreg = std::get<VirtualRegister>(operand);
-    arm64::Register physReg = getPhysicalRegister(vreg);
+    arm64::Register physReg = getPhysicalRegisterOrThrow(vreg);
     return physReg;
   }
 

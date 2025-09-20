@@ -3,11 +3,19 @@
 #include "IR/IR.h"
 #include "RISCV/Instruction.h"
 #include <array>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace dinorisc {
+
+class UnsupportedInstructionError : public std::runtime_error {
+public:
+  explicit UnsupportedInstructionError(const riscv::Instruction &inst)
+      : std::runtime_error("Unsupported RISC-V instruction: " +
+                           inst.toString()) {}
+};
 
 class Lifter {
 public:
@@ -21,7 +29,7 @@ public:
   ir::ValueId getRegisterValue(uint32_t regNum);
 
   // Check if an instruction is a control flow terminator
-  bool isTerminator(const riscv::Instruction &inst);
+  bool isTerminator(const riscv::Instruction &inst) const;
 
 private:
   // SSA value ID counter
@@ -78,7 +86,7 @@ private:
   ir::Terminator createConditionalBranch(ir::BinaryOpcode compareOp,
                                          const riscv::Instruction &inst,
                                          uint64_t fallThroughAddress);
-  uint64_t calculateBranchTarget(const riscv::Instruction &inst);
+  uint64_t calculateBranchTarget(const riscv::Instruction &inst) const;
 };
 
 } // namespace dinorisc

@@ -1,20 +1,23 @@
 #include "BinaryTranslator.h"
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <sys/mman.h>
 #include <unistd.h>
 
 namespace dinorisc {
+
+// Constants for memory allocation and execution limits
+static constexpr size_t SHADOW_MEMORY_SIZE = 8 * 1024 * 1024; // 8MB
+static constexpr size_t STACK_GUARD_SIZE = 1024;              // 1KB
+static constexpr int MAX_EXECUTION_BLOCKS = 10000;            // Execution limit
 
 BinaryTranslator::BinaryTranslator() : textBaseAddress(0), entryPoint(0) {
   initializeTranslator();
 }
 
 BinaryTranslator::~BinaryTranslator() {
-  // Clean up shadow memory
-  if (guestState.shadowMemory) {
-    munmap(guestState.shadowMemory, guestState.shadowMemorySize);
-  }
+  // GuestState destructor will handle shadow memory cleanup
 }
 
 void BinaryTranslator::initializeTranslator() {
@@ -26,13 +29,12 @@ void BinaryTranslator::initializeTranslator() {
   // Initialize guest state with entry point
   guestState.pc = 0; // Will be set when loading binary
 
-  // Allocate shadow memory for guest program (8MB)
-  const size_t shadowSize = 8 * 1024 * 1024;
+  // Allocate shadow memory for guest program
+  const size_t shadowSize = SHADOW_MEMORY_SIZE;
   void *shadowMem = mmap(nullptr, shadowSize, PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (shadowMem == MAP_FAILED) {
-    std::cerr << "Failed to allocate shadow memory" << std::endl;
-    return;
+    throw std::runtime_error("Failed to allocate shadow memory");
   }
 
   guestState.shadowMemory = shadowMem;
@@ -42,8 +44,8 @@ void BinaryTranslator::initializeTranslator() {
 
   // Set up initial stack pointer (x2/sp) in high memory
   // Stack grows down from high address within our shadow memory
-  uint64_t stackTop = shadowSize - 1024; // Leave some space at the top
-  guestState.x[2] = stackTop;            // x2 is the stack pointer
+  uint64_t stackTop = shadowSize - STACK_GUARD_SIZE;
+  guestState.x[2] = stackTop; // x2 is the stack pointer
 
   std::cout << "Shadow memory allocated: " << shadowSize << " bytes at host "
             << shadowMem << ", guest base 0x" << std::hex
@@ -64,11 +66,11 @@ bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
 
   // If entry point is 0, try to use main function address
   if (entryPoint == 0) {
-    uint64_t mainAddr = elfReader->getMainAddress();
-    if (mainAddr != 0) {
-      entryPoint = mainAddr;
+    auto mainAddr = elfReader->getFunctionAddress("main");
+    if (mainAddr.has_value()) {
+      entryPoint = mainAddr.value();
       std::cout << "Entry point was 0, using main function at 0x" << std::hex
-                << mainAddr << std::dec << std::endl;
+                << mainAddr.value() << std::dec << std::endl;
     } else {
       std::cerr << "Warning: Entry point is 0 and no main symbol found"
                 << std::endl;
@@ -141,7 +143,7 @@ std::vector<uint8_t> BinaryTranslator::encodeToMachineCode(
 
 uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   // Check if PC is within text section bounds
-  if (pc < textBaseAddress || pc >= textBaseAddress + textSectionData.size()) {
+  if (!isValidPC(pc)) {
     std::cerr << "PC out of bounds: 0x" << std::hex << pc << std::dec
               << std::endl;
     return 0;
@@ -216,22 +218,22 @@ int BinaryTranslator::executeFunction(const std::string &inputPath,
             << std::endl;
 
   // Get function address
-  uint64_t functionAddr = elfReader->getFunctionAddress(functionName);
-  if (functionAddr == 0) {
+  auto functionAddr = elfReader->getFunctionAddress(functionName);
+  if (!functionAddr.has_value()) {
     std::cerr << "Function '" << functionName << "' not found in binary"
               << std::endl;
     return -1;
   }
 
   // Initialize guest state with function address
-  guestState.pc = functionAddr;
+  guestState.pc = functionAddr.value();
 
   // Initialize link register (x1) to 0 so main() returns 0 to signal completion
   guestState.x[1] = 0;
 
   // Execute until completion or error
-  uint64_t currentPC = functionAddr;
-  int maxBlocks = 10000; // Large limit for real programs
+  uint64_t currentPC = functionAddr.value();
+  int maxBlocks = MAX_EXECUTION_BLOCKS;
   int blockCount = 0;
 
   while (blockCount < maxBlocks && currentPC != 0 &&
@@ -260,7 +262,7 @@ void BinaryTranslator::setArgumentRegisters(const std::vector<uint64_t> &args) {
 
 bool BinaryTranslator::shouldTerminate(uint64_t pc) {
   // Check if PC is out of bounds (program has exited)
-  if (pc < textBaseAddress || pc >= textBaseAddress + textSectionData.size()) {
+  if (!isValidPC(pc)) {
     return true;
   }
 
@@ -271,9 +273,13 @@ bool BinaryTranslator::shouldTerminate(uint64_t pc) {
   return false;
 }
 
+bool BinaryTranslator::isValidPC(uint64_t pc) const {
+  return pc >= textBaseAddress && pc < textBaseAddress + textSectionData.size();
+}
+
 int BinaryTranslator::getReturnValue() const {
   // In RISC-V calling convention, return value is in register a0 (x10)
-  return static_cast<int>(guestState.readRegister(10));
+  return static_cast<int>(guestState.x[10]);
 }
 
 } // namespace dinorisc

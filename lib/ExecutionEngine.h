@@ -7,10 +7,6 @@
 
 namespace dinorisc {
 
-// Function type for executing translated basic blocks
-// Takes guest state pointer and returns the next PC
-using CompiledBlockFunction = std::function<uint64_t(GuestState *)>;
-
 class ExecutionEngine {
 public:
   ExecutionEngine();
@@ -26,6 +22,9 @@ public:
 
   // Free executable memory
   void freeExecutableMemory(void *memory, size_t size);
+
+  // Free a specific allocated block
+  void freeBlock(void *memory);
 
 private:
   // Platform-specific implementation helpers

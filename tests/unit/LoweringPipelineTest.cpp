@@ -93,7 +93,6 @@ public:
     auto instructions = selector.selectInstructions(block);
 
     LivenessAnalysis liveness(instructions);
-    liveness.computeUseDef();
     auto liveIntervals = liveness.computeLiveIntervals();
 
     RegisterAllocator allocator;

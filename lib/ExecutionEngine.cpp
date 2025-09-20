@@ -13,21 +13,17 @@ ExecutionEngine::~ExecutionEngine() {
   for (const auto &region : allocatedRegions) {
     freeExecutableMemory(region.address, region.size);
   }
-  allocatedRegions.clear();
 }
 
 uint64_t ExecutionEngine::executeBlock(const std::vector<uint8_t> &machineCode,
                                        GuestState *guestState) {
   if (machineCode.empty()) {
-    std::cerr << "ExecutionEngine: Empty machine code block" << std::endl;
     return 0;
   }
 
   // Allocate executable memory and copy machine code
   void *execMemory = allocateExecutableMemory(machineCode);
   if (!execMemory) {
-    std::cerr << "ExecutionEngine: Failed to allocate executable memory"
-              << std::endl;
     return 0;
   }
 
@@ -39,20 +35,12 @@ uint64_t ExecutionEngine::executeBlock(const std::vector<uint8_t> &machineCode,
   CompiledBlockFunctionPtr func =
       reinterpret_cast<CompiledBlockFunctionPtr>(execMemory);
 
-  std::cout << "ExecutionEngine: Executing " << machineCode.size()
-            << " bytes of ARM64 code at PC=0x" << std::hex << guestState->pc
-            << std::dec << std::endl;
+  uint64_t nextPC = func(guestState);
 
-  try {
-    uint64_t nextPC = func(guestState);
-    std::cout << "ExecutionEngine: Block executed successfully, next PC=0x"
-              << std::hex << nextPC << std::dec << std::endl;
-    return nextPC;
-  } catch (...) {
-    std::cerr << "ExecutionEngine: Exception during block execution"
-              << std::endl;
-    return 0;
-  }
+  // Free the block immediately after execution
+  freeBlock(execMemory);
+
+  return nextPC;
 }
 
 void *ExecutionEngine::allocateExecutableMemory(
@@ -87,6 +75,17 @@ void *ExecutionEngine::allocateExecutableMemory(
 void ExecutionEngine::freeExecutableMemory(void *memory, size_t size) {
   if (memory) {
     munmap(memory, size);
+  }
+}
+
+void ExecutionEngine::freeBlock(void *memory) {
+  // Find and remove the block from allocatedRegions
+  for (auto it = allocatedRegions.begin(); it != allocatedRegions.end(); ++it) {
+    if (it->address == memory) {
+      freeExecutableMemory(it->address, it->size);
+      allocatedRegions.erase(it);
+      return;
+    }
   }
 }
 

@@ -53,6 +53,12 @@ ninja && ctest --output-on-failure  # Run all tests
 ninja test-e2e                      # Run end-to-end tests only
 ```
 
+**Important**: If a `.env` file exists in the project root, source it before running tests:
+```bash
+source .env && ctest --output-on-failure
+```
+This ensures proper environment configuration for RISC-V compilation toolchain.
+
 **Note**: E2E tests require:
 - `clang` with RISC-V target support in PATH
 - `pytest` installed in the active Python environment

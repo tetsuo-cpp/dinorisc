@@ -24,20 +24,30 @@ InstructionSelector::selectInstructions(const ir::BasicBlock &block) {
   return result;
 }
 
-VirtualRegister
+std::optional<VirtualRegister>
 InstructionSelector::getVirtualRegister(ir::ValueId valueId) const {
   auto it = irToVReg.find(valueId);
   if (it != irToVReg.end()) {
     return it->second;
   }
-  return 0; // Invalid register
+  return std::nullopt;
+}
+
+VirtualRegister
+InstructionSelector::getVirtualRegisterOrThrow(ir::ValueId valueId) const {
+  auto vreg = getVirtualRegister(valueId);
+  if (vreg.has_value()) {
+    return vreg.value();
+  }
+  throw std::runtime_error("No virtual register assigned to IR value " +
+                           std::to_string(valueId));
 }
 
 VirtualRegister
 InstructionSelector::assignVirtualRegister(ir::ValueId valueId) {
-  VirtualRegister existing = getVirtualRegister(valueId);
-  if (existing != 0) {
-    return existing;
+  auto existing = getVirtualRegister(valueId);
+  if (existing.has_value()) {
+    return existing.value();
   }
 
   VirtualRegister vreg = nextVirtualReg++;
@@ -136,64 +146,15 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
           };
           result.push_back(ret);
         } else if constexpr (std::is_same_v<T, ir::CondBranch>) {
-          // Use conditional select to choose target PC
-          VirtualRegister condReg = getVirtualRegister(termKind.condition);
-
-          // Compare condition against zero
-          arm64::Instruction cmp;
-          cmp.kind =
-              arm64::TwoOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
-                                    condReg, arm64::Immediate{0}};
-          result.push_back(cmp);
-
-          // Load true target into temporary register
-          // Create a unique IR value ID for the true target constant
-          ir::ValueId trueValueId =
-              nextVirtualReg++; // Use virtual reg as unique ID
-          VirtualRegister trueTempReg = assignVirtualRegister(trueValueId);
-          ir::Const trueConst{ir::Type::i64,
-                              static_cast<int64_t>(termKind.trueBlock)};
-          auto trueInsts = selectConst(trueConst, trueValueId);
-          result.insert(result.end(), trueInsts.begin(), trueInsts.end());
-
-          // Load false target into temporary register
-          // Create a unique IR value ID for the false target constant
-          ir::ValueId falseValueId =
-              nextVirtualReg++; // Use virtual reg as unique ID
-          VirtualRegister falseTempReg = assignVirtualRegister(falseValueId);
-          ir::Const falseConst{ir::Type::i64,
-                               static_cast<int64_t>(termKind.falseBlock)};
-          auto falseInsts = selectConst(falseConst, falseValueId);
-          result.insert(result.end(), falseInsts.begin(), falseInsts.end());
-
-          // Conditional select: choose true target if condition != 0 (NE)
-          VirtualRegister targetReg = nextVirtualReg++;
-          arm64::Instruction csel;
-          csel.kind = arm64::ConditionalSelectInst{
-              arm64::Opcode::CSEL, arm64::DataSize::X, targetReg,
-              trueTempReg,         falseTempReg,       arm64::Condition::NE};
-          result.push_back(csel);
-
-          // Move selected target to X0 for branch
-          arm64::Instruction movTarget;
-          movTarget.kind =
-              arm64::TwoOperandInst{arm64::Opcode::MOV, arm64::DataSize::X,
-                                    arm64::Register::X0, targetReg};
-          result.push_back(movTarget);
-
-          arm64::Instruction ret;
-          ret.kind = arm64::TwoOperandInst{
-              arm64::Opcode::RET, arm64::DataSize::X,
-              arm64::Register::X30, // Link register
-              arm64::Immediate{0}
-              // Unused immediate for structure compatibility
-          };
-          result.push_back(ret);
+          auto condBranchInsts = selectCondBranch(termKind);
+          result.insert(result.end(), condBranchInsts.begin(),
+                        condBranchInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Return>) {
           // If the return carries a value, move it into x0
           if (termKind.value.has_value()) {
             // Move the return value (next PC) into x0 for ARM64 return
-            VirtualRegister srcReg = getVirtualRegister(termKind.value.value());
+            VirtualRegister srcReg =
+                getVirtualRegisterOrThrow(termKind.value.value());
             arm64::Instruction moveReturn;
             moveReturn.kind = arm64::TwoOperandInst{
                 arm64::Opcode::MOV, arm64::DataSize::X,
@@ -224,12 +185,68 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
 }
 
 std::vector<arm64::Instruction>
+InstructionSelector::selectCondBranch(const ir::CondBranch &condBranch) {
+  std::vector<arm64::Instruction> result;
+
+  // Use conditional select to choose target PC
+  VirtualRegister condReg = getVirtualRegisterOrThrow(condBranch.condition);
+
+  // Compare condition against zero
+  arm64::Instruction cmp;
+  cmp.kind = arm64::TwoOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
+                                   condReg, arm64::Immediate{0}};
+  result.push_back(cmp);
+
+  // Load true target into temporary register
+  // Create a unique IR value ID for the true target constant
+  ir::ValueId trueValueId = nextVirtualReg++; // Use virtual reg as unique ID
+  VirtualRegister trueTempReg = assignVirtualRegister(trueValueId);
+  ir::Const trueConst{ir::Type::i64,
+                      static_cast<int64_t>(condBranch.trueBlock)};
+  auto trueInsts = selectConst(trueConst, trueValueId);
+  result.insert(result.end(), trueInsts.begin(), trueInsts.end());
+
+  // Load false target into temporary register
+  // Create a unique IR value ID for the false target constant
+  ir::ValueId falseValueId = nextVirtualReg++; // Use virtual reg as unique ID
+  VirtualRegister falseTempReg = assignVirtualRegister(falseValueId);
+  ir::Const falseConst{ir::Type::i64,
+                       static_cast<int64_t>(condBranch.falseBlock)};
+  auto falseInsts = selectConst(falseConst, falseValueId);
+  result.insert(result.end(), falseInsts.begin(), falseInsts.end());
+
+  // Conditional select: choose true target if condition != 0 (NE)
+  VirtualRegister targetReg = nextVirtualReg++;
+  arm64::Instruction csel;
+  csel.kind = arm64::ConditionalSelectInst{
+      arm64::Opcode::CSEL, arm64::DataSize::X, targetReg,
+      trueTempReg,         falseTempReg,       arm64::Condition::NE};
+  result.push_back(csel);
+
+  // Move selected target to X0 for branch
+  arm64::Instruction movTarget;
+  movTarget.kind = arm64::TwoOperandInst{arm64::Opcode::MOV, arm64::DataSize::X,
+                                         arm64::Register::X0, targetReg};
+  result.push_back(movTarget);
+
+  arm64::Instruction ret;
+  ret.kind = arm64::TwoOperandInst{
+      arm64::Opcode::RET, arm64::DataSize::X,
+      arm64::Register::X30, // Link register
+      arm64::Immediate{0}   // Unused immediate for structure compatibility
+  };
+  result.push_back(ret);
+
+  return result;
+}
+
+std::vector<arm64::Instruction>
 InstructionSelector::selectBinaryOp(const ir::BinaryOp &binOp,
                                     ir::ValueId resultId) {
   std::vector<arm64::Instruction> result;
   VirtualRegister destReg = assignVirtualRegister(resultId);
-  VirtualRegister lhsReg = getVirtualRegister(binOp.lhs);
-  VirtualRegister rhsReg = getVirtualRegister(binOp.rhs);
+  VirtualRegister lhsReg = getVirtualRegisterOrThrow(binOp.lhs);
+  VirtualRegister rhsReg = getVirtualRegisterOrThrow(binOp.rhs);
 
   // Check if this is a comparison operation
   bool isComparison = false;
@@ -311,51 +328,17 @@ InstructionSelector::selectLoad(const ir::Load &load, ir::ValueId resultId) {
   std::vector<arm64::Instruction> result;
 
   VirtualRegister destReg = assignVirtualRegister(resultId);
-  VirtualRegister guestAddrReg = getVirtualRegister(load.address);
+  VirtualRegister guestAddrReg = getVirtualRegisterOrThrow(load.address);
 
-  // Allocate temporary register for address translation
-  VirtualRegister tempReg = nextVirtualReg++;
+  // Perform address translation
+  VirtualRegister hostAddrReg;
+  auto addrTranslation = generateAddressTranslation(guestAddrReg, hostAddrReg);
+  result.insert(result.end(), addrTranslation.begin(), addrTranslation.end());
 
-  // Address translation sequence:
-  // Load guest base from GuestState (X0 is GuestState pointer)
-  // Load shadow base from GuestState
-  // temp = guest_addr - guest_base
-  // host_addr = temp + shadow_base
-
-  VirtualRegister guestBaseReg = nextVirtualReg++;
-  VirtualRegister shadowBaseReg = nextVirtualReg++;
-
-  // LDR guestBaseReg, [x0, #guestMemoryBase_offset]
-  arm64::Instruction loadGuestBase;
-  loadGuestBase.kind = arm64::MemoryInst{
-      arm64::Opcode::LDR, arm64::DataSize::X, guestBaseReg, arm64::Register::X0,
-      static_cast<int32_t>(offsetof(GuestState, guestMemoryBase))};
-  result.push_back(loadGuestBase);
-
-  // LDR shadowBaseReg, [x0, #shadowMemory_offset]
-  arm64::Instruction loadShadowBase;
-  loadShadowBase.kind = arm64::MemoryInst{
-      arm64::Opcode::LDR, arm64::DataSize::X, shadowBaseReg,
-      arm64::Register::X0,
-      static_cast<int32_t>(offsetof(GuestState, shadowMemory))};
-  result.push_back(loadShadowBase);
-
-  // SUB temp, guest_addr, guestBaseReg
-  arm64::Instruction sub;
-  sub.kind = arm64::ThreeOperandInst{arm64::Opcode::SUB, arm64::DataSize::X,
-                                     tempReg, guestAddrReg, guestBaseReg};
-  result.push_back(sub);
-
-  // ADD temp, temp, shadowBaseReg
-  arm64::Instruction add;
-  add.kind = arm64::ThreeOperandInst{arm64::Opcode::ADD, arm64::DataSize::X,
-                                     tempReg, tempReg, shadowBaseReg};
-  result.push_back(add);
-
-  // LDR dest, [temp]
+  // LDR dest, [hostAddrReg]
   arm64::Instruction ldr;
   ldr.kind = arm64::MemoryInst{arm64::Opcode::LDR, irTypeToDataSize(load.type),
-                               destReg, tempReg, 0};
+                               destReg, hostAddrReg, 0};
   result.push_back(ldr);
 
   return result;
@@ -365,12 +348,31 @@ std::vector<arm64::Instruction>
 InstructionSelector::selectStore(const ir::Store &store) {
   std::vector<arm64::Instruction> result;
 
-  VirtualRegister valueReg = getVirtualRegister(store.value);
-  VirtualRegister guestAddrReg = getVirtualRegister(store.address);
+  VirtualRegister valueReg = getVirtualRegisterOrThrow(store.value);
+  VirtualRegister guestAddrReg = getVirtualRegisterOrThrow(store.address);
   ir::Type valueType = getValueType(store.value);
 
+  // Perform address translation
+  VirtualRegister hostAddrReg;
+  auto addrTranslation = generateAddressTranslation(guestAddrReg, hostAddrReg);
+  result.insert(result.end(), addrTranslation.begin(), addrTranslation.end());
+
+  // STR value, [hostAddrReg]
+  arm64::Instruction str;
+  str.kind = arm64::MemoryInst{arm64::Opcode::STR, irTypeToDataSize(valueType),
+                               valueReg, hostAddrReg, 0};
+  result.push_back(str);
+
+  return result;
+}
+
+std::vector<arm64::Instruction>
+InstructionSelector::generateAddressTranslation(VirtualRegister guestAddrReg,
+                                                VirtualRegister &hostAddrReg) {
+  std::vector<arm64::Instruction> result;
+
   // Allocate temporary register for address translation
-  VirtualRegister tempReg = nextVirtualReg++;
+  hostAddrReg = nextVirtualReg++;
 
   // Address translation sequence:
   // Load guest base from GuestState (X0 is GuestState pointer)
@@ -399,20 +401,14 @@ InstructionSelector::selectStore(const ir::Store &store) {
   // SUB temp, guest_addr, guestBaseReg
   arm64::Instruction sub;
   sub.kind = arm64::ThreeOperandInst{arm64::Opcode::SUB, arm64::DataSize::X,
-                                     tempReg, guestAddrReg, guestBaseReg};
+                                     hostAddrReg, guestAddrReg, guestBaseReg};
   result.push_back(sub);
 
   // ADD temp, temp, shadowBaseReg
   arm64::Instruction add;
   add.kind = arm64::ThreeOperandInst{arm64::Opcode::ADD, arm64::DataSize::X,
-                                     tempReg, tempReg, shadowBaseReg};
+                                     hostAddrReg, hostAddrReg, shadowBaseReg};
   result.push_back(add);
-
-  // STR value, [temp]
-  arm64::Instruction str;
-  str.kind = arm64::MemoryInst{arm64::Opcode::STR, irTypeToDataSize(valueType),
-                               valueReg, tempReg, 0};
-  result.push_back(str);
 
   return result;
 }
@@ -514,7 +510,7 @@ InstructionSelector::selectConstIntoRegister(const ir::Const &constInst,
 arm64::Instruction InstructionSelector::selectSext(const ir::Sext &sext,
                                                    ir::ValueId resultId) {
   VirtualRegister destReg = assignVirtualRegister(resultId);
-  VirtualRegister srcReg = getVirtualRegister(sext.operand);
+  VirtualRegister srcReg = getVirtualRegisterOrThrow(sext.operand);
 
   arm64::Opcode opcode;
 
@@ -546,7 +542,7 @@ arm64::Instruction InstructionSelector::selectSext(const ir::Sext &sext,
 arm64::Instruction InstructionSelector::selectZext(const ir::Zext &zext,
                                                    ir::ValueId resultId) {
   VirtualRegister destReg = assignVirtualRegister(resultId);
-  VirtualRegister srcReg = getVirtualRegister(zext.operand);
+  VirtualRegister srcReg = getVirtualRegisterOrThrow(zext.operand);
 
   arm64::Opcode opcode;
 
@@ -579,7 +575,7 @@ arm64::Instruction InstructionSelector::selectZext(const ir::Zext &zext,
 arm64::Instruction InstructionSelector::selectTrunc(const ir::Trunc &trunc,
                                                     ir::ValueId resultId) {
   VirtualRegister destReg = assignVirtualRegister(resultId);
-  VirtualRegister srcReg = getVirtualRegister(trunc.operand);
+  VirtualRegister srcReg = getVirtualRegisterOrThrow(trunc.operand);
 
   arm64::Instruction inst;
   inst.kind = arm64::TwoOperandInst{
@@ -595,8 +591,10 @@ InstructionSelector::selectRegRead(const ir::RegRead &regRead,
 
   // Load from guest state: reg_value = guestState->x[regNumber]
   // We assume x0 contains pointer to guest state
-  // Calculate offset: regNumber * 8 (since each register is 64-bit)
-  int32_t offset = static_cast<int32_t>(regRead.regNumber * 8);
+  // Calculate offset: regNumber * REGISTER_SIZE_BYTES (since each register is
+  // 64-bit)
+  int32_t offset =
+      static_cast<int32_t>(regRead.regNumber * REGISTER_SIZE_BYTES);
 
   arm64::Instruction inst;
   inst.kind = arm64::MemoryInst{arm64::Opcode::LDR, arm64::DataSize::X, destReg,
@@ -608,11 +606,13 @@ InstructionSelector::selectRegRead(const ir::RegRead &regRead,
 
 arm64::Instruction
 InstructionSelector::selectRegWrite(const ir::RegWrite &regWrite) {
-  VirtualRegister valueReg = getVirtualRegister(regWrite.value);
+  VirtualRegister valueReg = getVirtualRegisterOrThrow(regWrite.value);
 
   // Store to guest state: guestState->x[regNumber] = value
-  // Calculate offset: regNumber * 8 (since each register is 64-bit)
-  int32_t offset = static_cast<int32_t>(regWrite.regNumber * 8);
+  // Calculate offset: regNumber * REGISTER_SIZE_BYTES (since each register is
+  // 64-bit)
+  int32_t offset =
+      static_cast<int32_t>(regWrite.regNumber * REGISTER_SIZE_BYTES);
 
   arm64::Instruction inst;
   inst.kind =

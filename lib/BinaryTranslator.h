@@ -22,8 +22,6 @@ public:
   BinaryTranslator();
   ~BinaryTranslator();
 
-  bool executeProgram(const std::string &inputPath);
-
   // Execute specific function and return the exit code from register a0 (x10)
   int executeFunction(const std::string &inputPath,
                       const std::string &functionName);
@@ -57,6 +55,9 @@ private:
 
   // Check if execution should terminate (e.g., invalid PC, system call)
   bool shouldTerminate(uint64_t pc);
+
+  // Check if PC is within text section bounds
+  bool isValidPC(uint64_t pc) const;
 
   // Extract return value from guest state
   int getReturnValue() const;

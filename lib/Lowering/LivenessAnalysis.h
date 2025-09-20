@@ -24,9 +24,6 @@ public:
   explicit LivenessAnalysis(
       const std::vector<arm64::Instruction> &instructions);
 
-  // Compute use-def information for all virtual registers
-  void computeUseDef();
-
   // Calculate live intervals for each virtual register
   std::vector<LiveInterval> computeLiveIntervals();
 
@@ -36,6 +33,9 @@ public:
 
 private:
   const std::vector<arm64::Instruction> &instructions;
+
+  // Compute use-def information for all virtual registers
+  void computeUseDef();
 
   // Use-def information
   std::unordered_map<uint32_t, size_t>

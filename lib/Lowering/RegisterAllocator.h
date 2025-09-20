@@ -2,6 +2,7 @@
 
 #include "../ARM64/Instruction.h"
 #include "LivenessAnalysis.h"
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -20,7 +21,12 @@ public:
                          const std::vector<LiveInterval> &liveIntervals);
 
   // Get the physical register assigned to a virtual register
-  arm64::Register getPhysicalRegister(VirtualRegister vreg) const;
+  std::optional<arm64::Register>
+  getPhysicalRegister(VirtualRegister vreg) const;
+
+  // Get the physical register assigned to a virtual register (throws if not
+  // found)
+  arm64::Register getPhysicalRegisterOrThrow(VirtualRegister vreg) const;
 
 private:
   // Available ARM64 general-purpose registers for allocation
@@ -37,7 +43,7 @@ private:
   std::vector<ActiveInterval> activeIntervals;
 
   // Get next available physical register
-  arm64::Register getNextAvailableRegister();
+  std::optional<arm64::Register> getNextAvailableRegister();
 
   // Check if a physical register is available at the given point
   bool isRegisterAvailable(arm64::Register reg, size_t point) const;

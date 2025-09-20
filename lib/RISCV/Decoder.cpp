@@ -5,13 +5,27 @@
 namespace dinorisc {
 namespace riscv {
 
+namespace {
+// Bit mask constants for field extraction
+constexpr uint32_t OPCODE_MASK = 0x7F;
+constexpr uint32_t REGISTER_MASK = 0x1F;
+constexpr uint32_t FUNCT3_MASK = 0x7;
+constexpr uint32_t FUNCT7_MASK = 0x7F;
+constexpr uint32_t IMM_12_MASK = 0xFFF;
+
+// Helper to read a 32-bit instruction from memory (little-endian)
+uint32_t readInstructionFromMemory(const uint8_t *data, size_t offset) {
+  return static_cast<uint32_t>(data[offset]) |
+         (static_cast<uint32_t>(data[offset + 1]) << 8) |
+         (static_cast<uint32_t>(data[offset + 2]) << 16) |
+         (static_cast<uint32_t>(data[offset + 3]) << 24);
+}
+} // namespace
+
 Instruction Decoder::decode(const uint8_t *data, size_t offset,
                             uint64_t pc) const {
   uint32_t rawInstruction = readInstructionFromMemory(data, offset);
-  return decode(rawInstruction, pc);
-}
 
-Instruction Decoder::decode(uint32_t rawInstruction, uint64_t pc) const {
   // Extract basic fields
   DecodedFields fields = extractFields(rawInstruction);
 
@@ -28,12 +42,12 @@ Instruction Decoder::decode(uint32_t rawInstruction, uint64_t pc) const {
 Decoder::DecodedFields Decoder::extractFields(uint32_t raw) const {
   DecodedFields fields{};
 
-  fields.opcode = raw & 0x7F;
-  fields.rd = (raw >> 7) & 0x1F;
-  fields.funct3 = (raw >> 12) & 0x7;
-  fields.rs1 = (raw >> 15) & 0x1F;
-  fields.rs2 = (raw >> 20) & 0x1F;
-  fields.funct7 = (raw >> 25) & 0x7F;
+  fields.opcode = raw & OPCODE_MASK;
+  fields.rd = (raw >> 7) & REGISTER_MASK;
+  fields.funct3 = (raw >> 12) & FUNCT3_MASK;
+  fields.rs1 = (raw >> 15) & REGISTER_MASK;
+  fields.rs2 = (raw >> 20) & REGISTER_MASK;
+  fields.funct7 = (raw >> 25) & FUNCT7_MASK;
 
   return fields;
 }
@@ -186,7 +200,7 @@ Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
     if (fields.funct3 == 0x0 && fields.rd == 0x0 && fields.rs1 == 0x0) {
       // For ECALL and EBREAK, check the immediate field (bits 31-20)
       // Don't check rs2 since it's part of the immediate
-      uint32_t imm = (raw >> 20) & 0xFFF;
+      uint32_t imm = (raw >> 20) & IMM_12_MASK;
       if (imm == 0x0)
         return Instruction::Opcode::ECALL;
       if (imm == 0x1)
@@ -195,8 +209,7 @@ Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
     break;
   }
 
-  throw std::runtime_error("Unrecognized RISC-V instruction: opcode=0x" +
-                           std::to_string(fields.opcode) + ", raw=0x" +
+  throw std::runtime_error("Unrecognized RISC-V instruction: 0x" +
                            std::to_string(raw));
 }
 
@@ -302,11 +315,15 @@ Decoder::extractOperands(const DecodedFields &fields,
 
   case Instruction::Opcode::INVALID:
     throw std::runtime_error("Cannot extract operands for invalid instruction");
+
+  default:
+    throw std::runtime_error("Unhandled opcode in extractOperands: " +
+                             std::to_string(static_cast<int>(opcode)));
   }
 }
 
 int32_t Decoder::extractITypeImmediate(uint32_t raw) const {
-  uint32_t imm = (raw >> 20) & 0xFFF;
+  uint32_t imm = (raw >> 20) & IMM_12_MASK;
   return signExtend(imm, 12);
 }
 
@@ -336,14 +353,6 @@ int32_t Decoder::extractJTypeImmediate(uint32_t raw) const {
   imm |= ((raw >> 20) & 0x1) << 11;  // imm[11]
   imm |= ((raw >> 21) & 0x3FF) << 1; // imm[10:1]
   return signExtend(imm, 21);
-}
-
-uint32_t Decoder::readInstructionFromMemory(const uint8_t *data,
-                                            size_t offset) {
-  return static_cast<uint32_t>(data[offset]) |
-         (static_cast<uint32_t>(data[offset + 1]) << 8) |
-         (static_cast<uint32_t>(data[offset + 2]) << 16) |
-         (static_cast<uint32_t>(data[offset + 3]) << 24);
 }
 
 } // namespace riscv

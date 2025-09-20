@@ -125,7 +125,6 @@ std::string binaryOpcodeToString(BinaryOpcode op) {
   case BinaryOpcode::GeU:
     return "geu";
   }
-  return "unknown";
 }
 
 std::string typeToString(Type type) {
@@ -141,7 +140,6 @@ std::string typeToString(Type type) {
   case Type::i64:
     return "i64";
   }
-  return "unknown";
 }
 
 } // namespace ir

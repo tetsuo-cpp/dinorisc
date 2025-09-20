@@ -4,6 +4,12 @@
 
 namespace dinorisc {
 
+namespace {
+constexpr uint32_t REG_ZERO = 0;
+constexpr uint32_t REG_RA = 1;
+constexpr uint64_t JALR_ALIGN_MASK = ~1ULL;
+} // namespace
+
 Lifter::Lifter() : nextValueId(1) {}
 
 ir::BasicBlock
@@ -18,7 +24,6 @@ Lifter::liftBasicBlock(const std::vector<riscv::Instruction> &instructions) {
     const auto &inst = instructions[i];
 
     if (isTerminator(inst)) {
-      // This instruction terminates the block - finalize register writes first
       finalizeRegisterWrites();
 
       uint64_t fallThroughAddress = (i + 1 < instructions.size())
@@ -27,14 +32,11 @@ Lifter::liftBasicBlock(const std::vector<riscv::Instruction> &instructions) {
       block.terminator = liftTerminator(inst, fallThroughAddress);
       break;
     } else {
-      // Regular instruction
       liftSingleInstruction(inst);
     }
   }
 
-  // If we didn't find a terminator, create a fall-through branch
   if (instructions.empty() || !isTerminator(instructions.back())) {
-    // Finalize register writes before creating fall-through terminator
     finalizeRegisterWrites();
 
     uint64_t nextAddress =
@@ -163,32 +165,27 @@ void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
   }
 
   default:
-    throw std::runtime_error("Unsupported RISC-V instruction in lifter: " +
-                             inst.toString());
+    throw UnsupportedInstructionError(inst);
   }
 }
 
 ir::ValueId Lifter::getRegisterValue(uint32_t regNum) {
-  if (regNum == 0) {
-    // x0 is always zero
+  if (regNum == REG_ZERO) {
     return createConstant(ir::Type::i64, 0);
   }
 
-  // Check if we already have a cached value for this register
   auto it = cachedRegisterValues.find(regNum);
   if (it != cachedRegisterValues.end()) {
     return it->second;
   }
 
-  // Generate RegRead instruction to load from GuestState (first read only)
   ir::ValueId valueId = addInstruction(ir::RegRead{regNum});
   cachedRegisterValues[regNum] = valueId;
   return valueId;
 }
 
 void Lifter::setRegisterValue(uint32_t regNum, ir::ValueId valueId) {
-  if (regNum != 0) { // x0 is always zero, cannot be set
-    // Update cached value and mark register as modified
+  if (regNum != REG_ZERO) {
     cachedRegisterValues[regNum] = valueId;
     modifiedRegisters.insert(regNum);
   }
@@ -299,7 +296,7 @@ void Lifter::liftStoreInstruction(const riscv::Instruction &inst,
   createStore(val, addr);
 }
 
-bool Lifter::isTerminator(const riscv::Instruction &inst) {
+bool Lifter::isTerminator(const riscv::Instruction &inst) const {
   switch (inst.opcode) {
   case riscv::Instruction::Opcode::BEQ:
   case riscv::Instruction::Opcode::BNE:
@@ -350,10 +347,8 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
     // JALR rd, rs1, imm: rd = pc + 4, pc = (rs1 + imm) & ~1
 
     // Check if this is a RET instruction (jalr x0, x1, 0)
-    if (inst.getRegister(0) == 0 && inst.getRegister(1) == 1 &&
+    if (inst.getRegister(0) == REG_ZERO && inst.getRegister(1) == REG_RA &&
         inst.getImmediate(2) == 0) {
-      // This is a RET instruction - return without a value
-      // The function return value is already in RISC-V register a0 (x10)
       return ir::Terminator{ir::Return{}};
     }
 
@@ -364,12 +359,12 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
                                             ir::Type::i64, rs1Value, immValue);
 
     // Clear LSB for alignment: targetAddr & ~1
-    ir::ValueId mask = createConstant(ir::Type::i64, ~1ULL);
+    ir::ValueId mask = createConstant(ir::Type::i64, JALR_ALIGN_MASK);
     ir::ValueId alignedTarget =
         createBinaryOp(ir::BinaryOpcode::And, ir::Type::i64, targetAddr, mask);
 
     // Now write the return address to the destination register (if rd != x0)
-    if (inst.getRegister(0) != 0) {
+    if (inst.getRegister(0) != REG_ZERO) {
       ir::ValueId returnAddr = createConstant(ir::Type::i64, inst.address + 4);
       setRegisterValue(inst.getRegister(0), returnAddr);
     }
@@ -393,12 +388,11 @@ ir::Terminator Lifter::createConditionalBranch(ir::BinaryOpcode compareOp,
   return ir::Terminator{ir::CondBranch{condition, target, fallThroughAddress}};
 }
 
-uint64_t Lifter::calculateBranchTarget(const riscv::Instruction &inst) {
+uint64_t Lifter::calculateBranchTarget(const riscv::Instruction &inst) const {
   return inst.address + inst.getImmediate(2);
 }
 
 void Lifter::finalizeRegisterWrites() {
-  // Generate RegWrite instructions for all registers that were modified
   for (uint32_t regNum : modifiedRegisters) {
     ir::ValueId finalValue = cachedRegisterValues[regNum];
     addInstruction(ir::RegWrite{regNum, finalValue});

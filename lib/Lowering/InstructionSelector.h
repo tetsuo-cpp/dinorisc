@@ -2,6 +2,7 @@
 
 #include "../ARM64/Instruction.h"
 #include "../IR/IR.h"
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -19,12 +20,17 @@ public:
   selectInstructions(const ir::BasicBlock &block);
 
   // Get the virtual register assigned to an IR value
-  VirtualRegister getVirtualRegister(ir::ValueId valueId) const;
+  std::optional<VirtualRegister> getVirtualRegister(ir::ValueId valueId) const;
+
+  // Get the virtual register assigned to an IR value (throws if not found)
+  VirtualRegister getVirtualRegisterOrThrow(ir::ValueId valueId) const;
 
   // Get mapping from virtual registers back to IR values (computed on demand)
   std::unordered_map<VirtualRegister, ir::ValueId> getVRegToIRMapping() const;
 
 private:
+  static constexpr size_t REGISTER_SIZE_BYTES = 8;
+
   VirtualRegister nextVirtualReg;
   std::unordered_map<ir::ValueId, VirtualRegister> irToVReg;
   std::unordered_map<ir::ValueId, ir::Type> valueTypes;
@@ -43,6 +49,10 @@ private:
   // Convert IR terminator to ARM64 instructions
   std::vector<arm64::Instruction> selectTerminator(const ir::Terminator &term);
 
+  // Helper for conditional branch terminator
+  std::vector<arm64::Instruction>
+  selectCondBranch(const ir::CondBranch &condBranch);
+
   // Helper functions for specific instruction types
   std::vector<arm64::Instruction> selectBinaryOp(const ir::BinaryOp &binOp,
                                                  ir::ValueId resultId);
@@ -60,6 +70,11 @@ private:
   arm64::Instruction selectRegRead(const ir::RegRead &regRead,
                                    ir::ValueId resultId);
   arm64::Instruction selectRegWrite(const ir::RegWrite &regWrite);
+
+  // Address translation helper
+  std::vector<arm64::Instruction>
+  generateAddressTranslation(VirtualRegister guestAddrReg,
+                             VirtualRegister &hostAddrReg);
 
   // Convert IR types to ARM64 data sizes
   arm64::DataSize irTypeToDataSize(ir::Type type) const;

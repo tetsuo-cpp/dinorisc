@@ -1,4 +1,5 @@
 #include "LivenessAnalysis.h"
+#include <algorithm>
 
 namespace dinorisc {
 namespace lowering {

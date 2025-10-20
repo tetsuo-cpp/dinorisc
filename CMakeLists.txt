@@ -14,7 +14,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Add third-party dependencies
-include_directories(${CMAKE_SOURCE_DIR}/third_party/elfio)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/ELFIO)
 
 # Testing support
 option(DINORISC_ENABLE_TESTING "Enable testing" ON)

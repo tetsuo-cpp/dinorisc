@@ -22,10 +22,15 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
     - `InstructionSelector`: Translates SSA IR to ARM64 instructions with virtual registers
     - `LivenessAnalysis`: Computes live intervals for virtual registers within basic blocks
     - `RegisterAllocator`: Linear scan register allocation algorithm
+  - `CAPI.h/CAPI.cpp`: C API for language bindings (used by Python package)
 - **tools/dinorisc/**: Command-line executable that executes RISC-V binaries
+- **python/**: Python package for invoking DinoRISC
+  - `dinorisc/`: Python module with high-level API and ctypes bindings
+  - `tests/`: Python API test suite using pytest
+  - `setup.py`: Package installation script
 - **third_party/**: External dependencies (ELFIO library, Catch2 testing framework)
 - **tests/**: Unit and end-to-end tests
-  - `unit/`: Unit tests using Catch2 framework  
+  - `unit/`: Unit tests using Catch2 framework
   - `e2e/`: End-to-end tests using pytest, includes RISC-V C sample programs
 - **build/**: Build artifacts (created by CMake/Ninja)
 
@@ -35,7 +40,8 @@ DinoRISC is a RISC-V 64-bit to ARM64 dynamic binary translation tool written in 
 ```bash
 mkdir build && cd build
 cmake -G Ninja ..
-ninja
+ninja                    # Build static library and executables
+ninja DinoRISCShared     # Build shared library for Python bindings
 ```
 
 ### Code Formatting
@@ -59,8 +65,36 @@ ninja test-e2e                      # Run end-to-end tests only
 
 ### Running
 ```bash
-./bin/dinorisc <riscv_binary>
+./bin/dinorisc <riscv_binary> <function_name> [args...]
 ```
+
+### Python API
+
+Install the Python package:
+```bash
+cd python
+pip install -e .
+```
+
+Use the Python API:
+```python
+import dinorisc
+
+# Execute a function with arguments
+result = dinorisc.execute_function("program.elf", "add", [5, 3])
+
+# Or use the Translator class
+with dinorisc.Translator() as translator:
+    result = translator.execute_function("program.elf", "fibonacci", [10])
+```
+
+Run Python API tests:
+```bash
+cd python
+pytest tests/
+```
+
+**Note**: Python API requires the shared library (`libdinorisc.so`) built via `ninja DinoRISCShared`
 
 ## Code Conventions
 
@@ -84,11 +118,15 @@ ninja test-e2e                      # Run end-to-end tests only
 ## Build System
 
 - CMake with Ninja generator preferred
-- Static library approach: core logic in `DinoRISCLib`, executable links against it
+- Two library targets:
+  - `DinoRISCLib`: Static library for C++ executables
+  - `DinoRISCShared`: Shared library (`libdinorisc.so`) for Python bindings with C API
 - Compiler flags: `-Wall -Wextra -Wno-unused-parameter`
 - Build outputs go to `build/bin/` and `build/lib/`
 - Testing enabled by default with `DINORISC_ENABLE_TESTING=ON`
-- Python dependencies for e2e tests: `pytest`, `black` (see `tests/e2e/requirements.txt`)
+- Python dependencies:
+  - For e2e tests: `pytest`, `black` (see `tests/e2e/requirements.txt`)
+  - For Python API: `pytest` (see `python/requirements-dev.txt`)
 
 ## Git Commit Guidelines
 

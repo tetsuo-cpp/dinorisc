@@ -103,14 +103,11 @@ See `tests/e2e/samples/` for example C programs that work with DinoRISC.
 # all tests
 ninja -C build && ctest --test-dir build --output-on-failure
 
-# unit tests individually
-./build/bin/DecoderTest
-./build/bin/EncoderTest
-./build/bin/ExecutionEngineTest
-./build/bin/LoweringPipelineTest
+# run a specific test
+ctest --test-dir build -R DecoderUnitTest --output-on-failure
 
 # end-to-end tests only
-ninja -C build test-e2e
+ctest --test-dir build -R E2ETests --output-on-failure
 ```
 
 E2E tests require a `clang` with RISC-V target support on your `PATH`. On macOS with Homebrew, the default Apple Clang doesn't include it — use the LLVM formula instead:

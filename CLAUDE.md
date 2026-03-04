@@ -45,12 +45,9 @@ ninja format  # Runs clang-format on C++ files and black on Python files
 
 ### Testing
 ```bash
-ninja && ctest --output-on-failure  # Run all tests
-./bin/DecoderTest                   # Run specific unit test
-./bin/EncoderTest                   # Run ARM64 encoder unit tests
-./bin/ExecutionEngineTest           # Run execution engine unit tests
-./bin/LoweringPipelineTest          # Run lowering pipeline unit tests
-ninja test-e2e                      # Run end-to-end tests only
+ninja && ctest --output-on-failure            # Run all tests
+ctest -R DecoderUnitTest --output-on-failure  # Run a specific test by name
+ctest -R E2ETests --output-on-failure         # Run end-to-end tests only
 ```
 
 **Important**: If a `.env` file exists in the project root, source it before running tests:

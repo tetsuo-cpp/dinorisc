@@ -1,6 +1,5 @@
 #include "Lifter.h"
 #include <stdexcept>
-#include <string>
 
 namespace dinorisc {
 
@@ -373,8 +372,7 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
   }
 
   default:
-    throw std::runtime_error(
-        "Invalid terminator instruction in liftTerminator");
+    throw UnsupportedInstructionError(inst);
   }
 }
 
@@ -384,12 +382,8 @@ ir::Terminator Lifter::createConditionalBranch(ir::BinaryOpcode compareOp,
   ir::ValueId rs1 = getRegisterValue(inst.getRegister(0));
   ir::ValueId rs2 = getRegisterValue(inst.getRegister(1));
   ir::ValueId condition = createBinaryOp(compareOp, ir::Type::i1, rs1, rs2);
-  uint64_t target = calculateBranchTarget(inst);
+  uint64_t target = inst.address + inst.getImmediate(2);
   return ir::Terminator{ir::CondBranch{condition, target, fallThroughAddress}};
-}
-
-uint64_t Lifter::calculateBranchTarget(const riscv::Instruction &inst) const {
-  return inst.address + inst.getImmediate(2);
 }
 
 void Lifter::finalizeRegisterWrites() {

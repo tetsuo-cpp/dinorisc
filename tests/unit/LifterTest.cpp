@@ -2,7 +2,6 @@
 #include "IR/IR.h"
 #include "RISCV/Instruction.h"
 #include <catch2/catch_all.hpp>
-#include <catch2/catch_test_macros.hpp>
 #include <set>
 
 using namespace dinorisc;
@@ -704,8 +703,8 @@ TEST_CASE("Lifter Register Handling", "[lifter][registers]") {
 
     auto block = lifter.liftBasicBlock({inst1, inst2});
 
-    // Should have: const(0), add(x0+42), RegWrite(x1), const(8), RegRead(x1),
-    // add(x1+8), RegWrite(x2)
+    // Should have: Const(0), Const(42), Add, Const(8), Add, RegWrite(x1),
+    // RegWrite(x2) — register caching means no RegRead for x1
     REQUIRE(block.instructions.size() == 7);
 
     // Verify we have the right number and types of instructions

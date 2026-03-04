@@ -2,7 +2,6 @@
 
 #include "IR/IR.h"
 #include "RISCV/Instruction.h"
-#include <array>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -86,7 +85,6 @@ private:
   ir::Terminator createConditionalBranch(ir::BinaryOpcode compareOp,
                                          const riscv::Instruction &inst,
                                          uint64_t fallThroughAddress);
-  uint64_t calculateBranchTarget(const riscv::Instruction &inst) const;
 };
 
 } // namespace dinorisc

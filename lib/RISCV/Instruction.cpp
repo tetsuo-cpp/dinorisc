@@ -136,22 +136,12 @@ std::string Instruction::opcodeToString(Opcode op) {
   case Opcode::INVALID:
     return "INVALID";
   }
-  return "UNKNOWN";
 }
 
 std::string Instruction::operandToString(const Operand &op) {
-  std::stringstream ss;
-  std::visit(
-      [&ss](const auto &operand) {
-        using T = std::decay_t<decltype(operand)>;
-        if constexpr (std::is_same_v<T, Register>) {
-          ss << "x" << operand.value;
-        } else if constexpr (std::is_same_v<T, Immediate>) {
-          ss << operand.value;
-        }
-      },
-      op);
-  return ss.str();
+  if (auto *reg = std::get_if<Register>(&op))
+    return "x" + std::to_string(reg->value);
+  return std::to_string(std::get<Immediate>(op).value);
 }
 
 } // namespace riscv

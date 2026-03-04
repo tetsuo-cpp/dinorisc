@@ -23,7 +23,7 @@ struct GuestState {
         guestMemoryBase(0) {}
 
   ~GuestState() {
-    if (shadowMemory && shadowMemorySize > 0) {
+    if (shadowMemory) {
       munmap(shadowMemory, shadowMemorySize);
     }
   }

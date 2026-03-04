@@ -45,9 +45,6 @@ private:
   // Get next available physical register
   std::optional<arm64::Register> getNextAvailableRegister();
 
-  // Check if a physical register is available at the given point
-  bool isRegisterAvailable(arm64::Register reg, size_t point) const;
-
   // Expire old intervals that are no longer active
   void expireOldIntervals(size_t currentPoint);
 

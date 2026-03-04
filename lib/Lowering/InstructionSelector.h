@@ -25,9 +25,6 @@ public:
   // Get the virtual register assigned to an IR value (throws if not found)
   VirtualRegister getVirtualRegisterOrThrow(ir::ValueId valueId) const;
 
-  // Get mapping from virtual registers back to IR values (computed on demand)
-  std::unordered_map<VirtualRegister, ir::ValueId> getVRegToIRMapping() const;
-
 private:
   static constexpr size_t REGISTER_SIZE_BYTES = 8;
 

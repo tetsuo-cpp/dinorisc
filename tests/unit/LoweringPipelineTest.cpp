@@ -2,7 +2,6 @@
 #include "Lowering/LivenessAnalysis.h"
 #include "Lowering/RegisterAllocator.h"
 #include <catch2/catch_all.hpp>
-#include <catch2/catch_test_macros.hpp>
 
 using namespace dinorisc;
 using namespace dinorisc::lowering;
@@ -86,25 +85,6 @@ private:
   ir::Terminator terminator;
 };
 
-class LoweringPipeline {
-public:
-  std::vector<arm64::Instruction> lower(const ir::BasicBlock &block) {
-    InstructionSelector selector;
-    auto instructions = selector.selectInstructions(block);
-
-    LivenessAnalysis liveness(instructions);
-    auto liveIntervals = liveness.computeLiveIntervals();
-
-    RegisterAllocator allocator;
-    bool success = allocator.allocateRegisters(instructions, liveIntervals);
-    if (!success) {
-      throw std::runtime_error("Register allocation failed");
-    }
-
-    return instructions;
-  }
-};
-
 bool hasOnlyPhysicalRegisters(
     const std::vector<arm64::Instruction> &instructions) {
   for (const auto &inst : instructions) {
@@ -124,8 +104,14 @@ bool hasOnlyPhysicalRegisters(
           } else if constexpr (std::is_same_v<T, arm64::MemoryInst>) {
             return !checkOperand(instKind.reg) ||
                    !checkOperand(instKind.baseReg);
-          } else if constexpr (std::is_same_v<T, arm64::BranchInst>) {
-            return false; // BranchInst has no operands, so no virtual registers
+          } else if constexpr (std::is_same_v<T, arm64::MoveWideInst>) {
+            return !checkOperand(instKind.dest);
+          } else if constexpr (std::is_same_v<T, arm64::ConditionalInst>) {
+            return !checkOperand(instKind.dest);
+          } else if constexpr (std::is_same_v<T,
+                                              arm64::ConditionalSelectInst>) {
+            return !checkOperand(instKind.dest) ||
+                   !checkOperand(instKind.src1) || !checkOperand(instKind.src2);
           } else {
             return false;
           }
@@ -144,14 +130,7 @@ bool containsOpcode(const std::vector<arm64::Instruction> &instructions,
   for (const auto &inst : instructions) {
     bool found = std::visit(
         [expectedOpcode](const auto &instKind) {
-          using T = std::decay_t<decltype(instKind)>;
-          if constexpr (std::is_same_v<T, arm64::ThreeOperandInst> ||
-                        std::is_same_v<T, arm64::TwoOperandInst> ||
-                        std::is_same_v<T, arm64::MemoryInst> ||
-                        std::is_same_v<T, arm64::BranchInst>) {
-            return instKind.opcode == expectedOpcode;
-          }
-          return false;
+          return instKind.opcode == expectedOpcode;
         },
         inst.kind);
     if (found)
@@ -160,22 +139,35 @@ bool containsOpcode(const std::vector<arm64::Instruction> &instructions,
   return false;
 }
 
-TEST_CASE("Lowering pipeline basic arithmetic", "[lowering]") {
-  LoweringPipeline pipeline;
+std::vector<arm64::Instruction> lowerAndVerify(IRBuilder &builder) {
+  InstructionSelector selector;
+  auto instructions = selector.selectInstructions(builder.build());
 
+  LivenessAnalysis liveness(instructions);
+  auto liveIntervals = liveness.computeLiveIntervals();
+
+  RegisterAllocator allocator;
+  bool success = allocator.allocateRegisters(instructions, liveIntervals);
+  if (!success) {
+    throw std::runtime_error("Register allocation failed");
+  }
+
+  REQUIRE(!instructions.empty());
+  REQUIRE(hasOnlyPhysicalRegisters(instructions));
+  return instructions;
+}
+
+TEST_CASE("Lowering pipeline basic arithmetic", "[lowering]") {
   SECTION("Simple addition") {
     IRBuilder builder;
     auto v1 = builder.addConst(ir::Type::i64, 10);
     auto v2 = builder.addConst(ir::Type::i64, 20);
-    auto v3 = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, v1, v2);
-    builder.setReturnTerminator(v3);
+    builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, v1, v2);
+    builder.setVoidReturnTerminator();
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
-    REQUIRE(containsOpcode(result, arm64::Opcode::MOV)); // Constants
-    REQUIRE(containsOpcode(result, arm64::Opcode::ADD)); // Addition
+    auto result = lowerAndVerify(builder);
+    REQUIRE(containsOpcode(result, arm64::Opcode::MOV));
+    REQUIRE(containsOpcode(result, arm64::Opcode::ADD));
   }
 
   SECTION("Arithmetic chain") {
@@ -187,10 +179,7 @@ TEST_CASE("Lowering pipeline basic arithmetic", "[lowering]") {
     auto v5 = builder.addBinaryOp(ir::BinaryOpcode::Mul, ir::Type::i64, v3, v4);
     builder.setReturnTerminator(v5);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::ADD));
     REQUIRE(containsOpcode(result, arm64::Opcode::MUL));
   }
@@ -209,10 +198,7 @@ TEST_CASE("Lowering pipeline basic arithmetic", "[lowering]") {
 
     builder.setReturnTerminator(mulResult);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::ADD));
     REQUIRE(containsOpcode(result, arm64::Opcode::SUB));
     REQUIRE(containsOpcode(result, arm64::Opcode::MUL));
@@ -220,8 +206,6 @@ TEST_CASE("Lowering pipeline basic arithmetic", "[lowering]") {
 }
 
 TEST_CASE("Lowering pipeline memory operations", "[lowering]") {
-  LoweringPipeline pipeline;
-
   SECTION("Load and store") {
     IRBuilder builder;
     auto address = builder.addConst(ir::Type::i64, 0x1000);
@@ -230,10 +214,7 @@ TEST_CASE("Lowering pipeline memory operations", "[lowering]") {
     builder.addStore(newValue, address);
     builder.setReturnTerminator(loadedValue);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::LDR));
     REQUIRE(containsOpcode(result, arm64::Opcode::STR));
   }
@@ -247,18 +228,13 @@ TEST_CASE("Lowering pipeline memory operations", "[lowering]") {
     auto value = builder.addLoad(ir::Type::i32, address);
     builder.setReturnTerminator(value);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::ADD));
     REQUIRE(containsOpcode(result, arm64::Opcode::LDR));
   }
 }
 
 TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
-  LoweringPipeline pipeline;
-
   SECTION("Sign extension") {
     IRBuilder builder;
     auto value32 =
@@ -266,10 +242,7 @@ TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
     auto extended = builder.addSext(ir::Type::i64, value32);
     builder.setReturnTerminator(extended);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::SXTW));
   }
 
@@ -279,10 +252,7 @@ TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
     auto extended = builder.addZext(ir::Type::i64, value16);
     builder.setReturnTerminator(extended);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::UXTH));
   }
 
@@ -292,16 +262,11 @@ TEST_CASE("Lowering pipeline type conversions", "[lowering]") {
     auto truncated = builder.addTrunc(ir::Type::i32, value64);
     builder.setReturnTerminator(truncated);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 }
 
 TEST_CASE("Lowering pipeline control flow", "[lowering]") {
-  LoweringPipeline pipeline;
-
   SECTION("Conditional branch") {
     IRBuilder builder;
     auto v1 = builder.addConst(ir::Type::i64, 10);
@@ -309,10 +274,7 @@ TEST_CASE("Lowering pipeline control flow", "[lowering]") {
     auto cmp = builder.addBinaryOp(ir::BinaryOpcode::Lt, ir::Type::i1, v1, v2);
     builder.setCondBranchTerminator(cmp, 100, 200);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::CMP));
   }
 
@@ -320,22 +282,13 @@ TEST_CASE("Lowering pipeline control flow", "[lowering]") {
     IRBuilder builder;
     builder.setBranchTerminator(100);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
-
-    // Branch instructions are now handled by the dispatcher, not the lowering
-    // pipeline The lowering pipeline should just generate the prologue/epilogue
-    // for the block
-    REQUIRE(containsOpcode(result, arm64::Opcode::MOV)); // Block setup
-    REQUIRE(containsOpcode(result, arm64::Opcode::RET)); // Block return
+    auto result = lowerAndVerify(builder);
+    REQUIRE(containsOpcode(result, arm64::Opcode::MOV));
+    REQUIRE(containsOpcode(result, arm64::Opcode::RET));
   }
 }
 
 TEST_CASE("Lowering pipeline register allocation scenarios", "[lowering]") {
-  LoweringPipeline pipeline;
-
   SECTION("Low register pressure") {
     IRBuilder builder;
     auto v1 = builder.addConst(ir::Type::i64, 1);
@@ -343,22 +296,17 @@ TEST_CASE("Lowering pipeline register allocation scenarios", "[lowering]") {
     auto v3 = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, v1, v2);
     builder.setReturnTerminator(v3);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 
   SECTION("Medium register pressure") {
     IRBuilder builder;
     std::vector<ir::ValueId> values;
 
-    // Create 8 constants
     for (int i = 0; i < 8; ++i) {
       values.push_back(builder.addConst(ir::Type::i64, i * 10));
     }
 
-    // Chain them together with additions
     ir::ValueId accumulator = values[0];
     for (size_t i = 1; i < values.size(); ++i) {
       accumulator = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64,
@@ -367,16 +315,12 @@ TEST_CASE("Lowering pipeline register allocation scenarios", "[lowering]") {
 
     builder.setReturnTerminator(accumulator);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 
   SECTION("Parallel computations") {
     IRBuilder builder;
 
-    // Create two independent computation chains
     auto a1 = builder.addConst(ir::Type::i64, 10);
     auto a2 = builder.addConst(ir::Type::i64, 20);
     auto a3 = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, a1, a2);
@@ -385,15 +329,11 @@ TEST_CASE("Lowering pipeline register allocation scenarios", "[lowering]") {
     auto b2 = builder.addConst(ir::Type::i64, 40);
     auto b3 = builder.addBinaryOp(ir::BinaryOpcode::Mul, ir::Type::i64, b1, b2);
 
-    // Combine results
     auto final =
         builder.addBinaryOp(ir::BinaryOpcode::Sub, ir::Type::i64, a3, b3);
     builder.setReturnTerminator(final);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::ADD));
     REQUIRE(containsOpcode(result, arm64::Opcode::MUL));
     REQUIRE(containsOpcode(result, arm64::Opcode::SUB));
@@ -401,8 +341,6 @@ TEST_CASE("Lowering pipeline register allocation scenarios", "[lowering]") {
 }
 
 TEST_CASE("Lowering pipeline complex patterns", "[lowering]") {
-  LoweringPipeline pipeline;
-
   SECTION("Load-modify-store pattern") {
     IRBuilder builder;
     auto address = builder.addConst(ir::Type::i64, 0x2000);
@@ -413,10 +351,7 @@ TEST_CASE("Lowering pipeline complex patterns", "[lowering]") {
     builder.addStore(newValue, address);
     builder.setReturnTerminator(newValue);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::LDR));
     REQUIRE(containsOpcode(result, arm64::Opcode::ADD));
     REQUIRE(containsOpcode(result, arm64::Opcode::STR));
@@ -434,15 +369,11 @@ TEST_CASE("Lowering pipeline complex patterns", "[lowering]") {
 
     auto sum = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64,
                                    ext8to64, ext16to64);
-    auto finalResult =
-        builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, sum,
-                            builder.addZext(ir::Type::i64, trunc32to16));
-    builder.setReturnTerminator(finalResult);
+    builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64, sum,
+                        builder.addZext(ir::Type::i64, trunc32to16));
+    builder.setVoidReturnTerminator();
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 
   SECTION("Comparison with conditional branch") {
@@ -452,25 +383,17 @@ TEST_CASE("Lowering pipeline complex patterns", "[lowering]") {
     auto cmp = builder.addBinaryOp(ir::BinaryOpcode::Lt, ir::Type::i1, x, y);
     builder.setCondBranchTerminator(cmp, 1000, 2000);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::CMP));
   }
 }
 
 TEST_CASE("Lowering pipeline edge cases", "[lowering]") {
-  LoweringPipeline pipeline;
-
   SECTION("Empty basic block with void return") {
     IRBuilder builder;
     builder.setVoidReturnTerminator();
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty()); // Should at least have a return
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 
   SECTION("Single constant") {
@@ -478,10 +401,7 @@ TEST_CASE("Lowering pipeline edge cases", "[lowering]") {
     auto value = builder.addConst(ir::Type::i64, 123);
     builder.setReturnTerminator(value);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    auto result = lowerAndVerify(builder);
     REQUIRE(containsOpcode(result, arm64::Opcode::MOV));
   }
 
@@ -489,7 +409,6 @@ TEST_CASE("Lowering pipeline edge cases", "[lowering]") {
     IRBuilder builder;
     ir::ValueId current = builder.addConst(ir::Type::i64, 1);
 
-    // Create a chain of 10 additions
     for (int i = 0; i < 10; ++i) {
       auto next = builder.addConst(ir::Type::i64, i + 2);
       current = builder.addBinaryOp(ir::BinaryOpcode::Add, ir::Type::i64,
@@ -498,10 +417,7 @@ TEST_CASE("Lowering pipeline edge cases", "[lowering]") {
 
     builder.setReturnTerminator(current);
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 
   SECTION("Different types in same block") {
@@ -518,9 +434,6 @@ TEST_CASE("Lowering pipeline edge cases", "[lowering]") {
 
     builder.setVoidReturnTerminator();
 
-    auto result = pipeline.lower(builder.build());
-
-    REQUIRE(!result.empty());
-    REQUIRE(hasOnlyPhysicalRegisters(result));
+    lowerAndVerify(builder);
   }
 }

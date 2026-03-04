@@ -1,7 +1,6 @@
 #include "RegisterAllocator.h"
 #include <algorithm>
 #include <cassert>
-#include <set>
 
 namespace dinorisc {
 namespace lowering {
@@ -82,29 +81,15 @@ RegisterAllocator::getPhysicalRegisterOrThrow(VirtualRegister vreg) const {
 }
 
 std::optional<arm64::Register> RegisterAllocator::getNextAvailableRegister() {
-  std::set<arm64::Register> inUse;
-  for (const auto &active : activeIntervals) {
-    inUse.insert(active.physicalReg);
-  }
-
   for (arm64::Register reg : availableRegisters) {
-    if (inUse.find(reg) == inUse.end()) {
+    if (std::none_of(activeIntervals.begin(), activeIntervals.end(),
+                     [reg](const ActiveInterval &active) {
+                       return active.physicalReg == reg;
+                     })) {
       return reg;
     }
   }
-
-  return std::nullopt; // No available register
-}
-
-bool RegisterAllocator::isRegisterAvailable(arm64::Register reg,
-                                            size_t point) const {
-  for (const auto &active : activeIntervals) {
-    if (active.physicalReg == reg && active.interval.start <= point &&
-        point <= active.interval.end) {
-      return false;
-    }
-  }
-  return true;
+  return std::nullopt;
 }
 
 void RegisterAllocator::expireOldIntervals(size_t currentPoint) {
@@ -135,7 +120,6 @@ void RegisterAllocator::replaceVirtualRegisters(arm64::Instruction &inst) {
         } else if constexpr (std::is_same_v<T, arm64::MoveWideInst>) {
           instKind.dest = replaceOperandRegister(instKind.dest);
         } else if constexpr (std::is_same_v<T, arm64::BranchInst>) {
-          // No register operands to replace
         } else if constexpr (std::is_same_v<T, arm64::ConditionalInst>) {
           instKind.dest = replaceOperandRegister(instKind.dest);
         } else if constexpr (std::is_same_v<T, arm64::ConditionalSelectInst>) {

@@ -11,17 +11,14 @@ void LivenessAnalysis::computeUseDef() {
   defSites.clear();
   useSites.clear();
 
-  // Process instructions in order
   for (size_t i = 0; i < instructions.size(); ++i) {
     const auto &inst = instructions[i];
 
-    // Record definition sites
     auto definedVRegs = getDefinedVirtualRegisters(inst);
     for (uint32_t vreg : definedVRegs) {
       defSites[vreg] = i;
     }
 
-    // Record use sites
     auto usedVRegs = getUsedVirtualRegisters(inst);
     for (uint32_t vreg : usedVRegs) {
       useSites[vreg].push_back(i);
@@ -44,7 +41,7 @@ std::vector<LiveInterval> LivenessAnalysis::computeLiveIntervals() {
     interval.end = defSite; // At minimum, live at definition
 
     auto useIt = useSites.find(vreg);
-    if (useIt != useSites.end() && !useIt->second.empty()) {
+    if (useIt != useSites.end()) {
       // Extend to the last use
       interval.end =
           *std::max_element(useIt->second.begin(), useIt->second.end());
@@ -60,29 +57,6 @@ std::vector<LiveInterval> LivenessAnalysis::computeLiveIntervals() {
             });
 
   return intervals;
-}
-
-std::set<uint32_t> LivenessAnalysis::getLiveAtIndex(size_t index) const {
-  std::set<uint32_t> liveVRegs;
-
-  // A virtual register is live at index if it's defined before or at index
-  // and used at or after index
-  for (const auto &[vreg, defSite] : defSites) {
-    if (defSite <= index) {
-      // Check if it's used after this index
-      auto useIt = useSites.find(vreg);
-      if (useIt != useSites.end()) {
-        for (size_t useSite : useIt->second) {
-          if (useSite >= index) {
-            liveVRegs.insert(vreg);
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  return liveVRegs;
 }
 
 std::set<uint32_t> LivenessAnalysis::getUsedVirtualRegisters(

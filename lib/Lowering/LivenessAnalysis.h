@@ -27,10 +27,6 @@ public:
   // Calculate live intervals for each virtual register
   std::vector<LiveInterval> computeLiveIntervals();
 
-  // Get the set of virtual registers that are live at a specific instruction
-  // index
-  std::set<uint32_t> getLiveAtIndex(size_t index) const;
-
 private:
   const std::vector<arm64::Instruction> &instructions;
 

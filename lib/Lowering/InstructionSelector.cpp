@@ -5,19 +5,48 @@
 namespace dinorisc {
 namespace lowering {
 
+namespace {
+
+std::optional<arm64::Condition> comparisonCondition(ir::BinaryOpcode opcode) {
+  switch (opcode) {
+  case ir::BinaryOpcode::Eq:
+    return arm64::Condition::EQ;
+  case ir::BinaryOpcode::Ne:
+    return arm64::Condition::NE;
+  case ir::BinaryOpcode::Lt:
+    return arm64::Condition::LT;
+  case ir::BinaryOpcode::Le:
+    return arm64::Condition::LE;
+  case ir::BinaryOpcode::Gt:
+    return arm64::Condition::GT;
+  case ir::BinaryOpcode::Ge:
+    return arm64::Condition::GE;
+  case ir::BinaryOpcode::LtU:
+    return arm64::Condition::CC;
+  case ir::BinaryOpcode::LeU:
+    return arm64::Condition::LS;
+  case ir::BinaryOpcode::GtU:
+    return arm64::Condition::HI;
+  case ir::BinaryOpcode::GeU:
+    return arm64::Condition::CS;
+  default:
+    return std::nullopt;
+  }
+}
+
+} // namespace
+
 InstructionSelector::InstructionSelector() : nextVirtualReg(0) {}
 
 std::vector<arm64::Instruction>
 InstructionSelector::selectInstructions(const ir::BasicBlock &block) {
   std::vector<arm64::Instruction> result;
 
-  // Select instructions for each IR instruction
   for (const auto &inst : block.instructions) {
     auto selected = selectInstruction(inst);
     result.insert(result.end(), selected.begin(), selected.end());
   }
 
-  // Select instructions for the terminator
   auto termSelected = selectTerminator(block.terminator);
   result.insert(result.end(), termSelected.begin(), termSelected.end());
 
@@ -53,15 +82,6 @@ InstructionSelector::assignVirtualRegister(ir::ValueId valueId) {
   VirtualRegister vreg = nextVirtualReg++;
   irToVReg[valueId] = vreg;
   return vreg;
-}
-
-std::unordered_map<VirtualRegister, ir::ValueId>
-InstructionSelector::getVRegToIRMapping() const {
-  std::unordered_map<VirtualRegister, ir::ValueId> result;
-  for (const auto &[irId, vreg] : irToVReg) {
-    result[vreg] = irId;
-  }
-  return result;
 }
 
 void InstructionSelector::recordValueType(ir::ValueId valueId, ir::Type type) {
@@ -129,8 +149,6 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
         using T = std::decay_t<decltype(termKind)>;
 
         if constexpr (std::is_same_v<T, ir::Branch>) {
-          // Load target PC into X0 and return to dispatcher
-          // Generate constant loading sequence directly into X0
           ir::Const targetConst{ir::Type::i64,
                                 static_cast<int64_t>(termKind.targetBlock)};
           auto constInsts =
@@ -148,25 +166,21 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
           result.insert(result.end(), condBranchInsts.begin(),
                         condBranchInsts.end());
         } else if constexpr (std::is_same_v<T, ir::Return>) {
-          // If the return carries a value, move it into x0
           if (termKind.value.has_value()) {
-            // Move the return value (next PC) into x0 for ARM64 return
             VirtualRegister srcReg =
                 getVirtualRegisterOrThrow(termKind.value.value());
             arm64::Instruction moveReturn;
-            moveReturn.kind = arm64::TwoOperandInst{
-                arm64::Opcode::MOV, arm64::DataSize::X,
-                arm64::Register::X0, // ARM64 return register
-                srcReg};
+            moveReturn.kind =
+                arm64::TwoOperandInst{arm64::Opcode::MOV, arm64::DataSize::X,
+                                      arm64::Register::X0, srcReg};
             result.push_back(moveReturn);
           } else {
-            // Function return: make sure next-PC = 0 so the dispatcher stops
+            // next-PC = 0 so the dispatcher stops
             ir::Const zero{ir::Type::i64, 0};
             auto zeroInsts = selectConstIntoRegister(zero, arm64::Register::X0);
             result.insert(result.end(), zeroInsts.begin(), zeroInsts.end());
           }
 
-          // Finally emit the RET itself
           arm64::Instruction ret;
           ret.kind =
               arm64::TwoOperandInst{arm64::Opcode::RET, arm64::DataSize::X,
@@ -242,71 +256,17 @@ InstructionSelector::selectBinaryOp(const ir::BinaryOp &binOp,
   VirtualRegister lhsReg = getVirtualRegisterOrThrow(binOp.lhs);
   VirtualRegister rhsReg = getVirtualRegisterOrThrow(binOp.rhs);
 
-  // Check if this is a comparison operation
-  bool isComparison = false;
-  arm64::Condition condition;
-
-  switch (binOp.opcode) {
-  case ir::BinaryOpcode::Eq:
-    isComparison = true;
-    condition = arm64::Condition::EQ;
-    break;
-  case ir::BinaryOpcode::Ne:
-    isComparison = true;
-    condition = arm64::Condition::NE;
-    break;
-  case ir::BinaryOpcode::Lt:
-    isComparison = true;
-    condition = arm64::Condition::LT;
-    break;
-  case ir::BinaryOpcode::Le:
-    isComparison = true;
-    condition = arm64::Condition::LE;
-    break;
-  case ir::BinaryOpcode::Gt:
-    isComparison = true;
-    condition = arm64::Condition::GT;
-    break;
-  case ir::BinaryOpcode::Ge:
-    isComparison = true;
-    condition = arm64::Condition::GE;
-    break;
-  case ir::BinaryOpcode::LtU:
-    isComparison = true;
-    condition = arm64::Condition::CC; // Unsigned less than
-    break;
-  case ir::BinaryOpcode::LeU:
-    isComparison = true;
-    condition = arm64::Condition::LS; // Unsigned less than or equal
-    break;
-  case ir::BinaryOpcode::GtU:
-    isComparison = true;
-    condition = arm64::Condition::HI; // Unsigned greater than
-    break;
-  case ir::BinaryOpcode::GeU:
-    isComparison = true;
-    condition = arm64::Condition::CS; // Unsigned greater than or equal
-    break;
-  default:
-    isComparison = false;
-    break;
-  }
-
-  if (isComparison) {
-    // Generate CMP + CSET for comparison operations
-    // CMP lhs, rhs
+  if (auto condition = comparisonCondition(binOp.opcode)) {
     arm64::Instruction cmp;
     cmp.kind = arm64::TwoOperandInst{arm64::Opcode::CMP, arm64::DataSize::X,
                                      lhsReg, rhsReg};
     result.push_back(cmp);
 
-    // CSET dest, condition
     arm64::Instruction cset;
     cset.kind = arm64::ConditionalInst{arm64::Opcode::CSET, arm64::DataSize::X,
-                                       destReg, condition};
+                                       destReg, *condition};
     result.push_back(cset);
   } else {
-    // Generate regular arithmetic operation
     arm64::Instruction inst;
     inst.kind = arm64::ThreeOperandInst{irBinaryOpToARM64(binOp.opcode),
                                         irTypeToDataSize(binOp.type), destReg,
@@ -436,61 +396,23 @@ InstructionSelector::selectConstIntoRegister(const ir::Const &constInst,
         arm64::Immediate{static_cast<uint64_t>(constInst.value)}};
     result.push_back(inst);
   } else {
-    // Handle large constants with MOVZ/MOVK sequence
     uint64_t value = static_cast<uint64_t>(constInst.value);
+    bool firstChunk = true;
 
-    // Extract 16-bit chunks
-    uint16_t chunk0 = static_cast<uint16_t>(value & 0xFFFF); // bits 0-15
-    uint16_t chunk1 =
-        static_cast<uint16_t>((value >> 16) & 0xFFFF); // bits 16-31
-    uint16_t chunk2 =
-        static_cast<uint16_t>((value >> 32) & 0xFFFF); // bits 32-47
-    uint16_t chunk3 =
-        static_cast<uint16_t>((value >> 48) & 0xFFFF); // bits 48-63
+    for (int shift = 0; shift < 64; shift += 16) {
+      uint16_t chunk = static_cast<uint16_t>((value >> shift) & 0xFFFF);
+      if (chunk == 0)
+        continue;
 
-    // Start with MOVZ for the first non-zero chunk
-    bool firstInst = true;
-
-    if (chunk0 != 0) {
+      auto opcode = firstChunk ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
       arm64::Instruction inst;
-      inst.kind = arm64::MoveWideInst{arm64::Opcode::MOVZ, dataSize,
-                                      targetOperand, chunk0, 0};
+      inst.kind = arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk,
+                                      static_cast<uint8_t>(shift)};
       result.push_back(inst);
-      firstInst = false;
+      firstChunk = false;
     }
 
-    if (chunk1 != 0) {
-      arm64::Opcode opcode =
-          firstInst ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
-      arm64::Instruction inst;
-      inst.kind =
-          arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk1, 16};
-      result.push_back(inst);
-      firstInst = false;
-    }
-
-    if (chunk2 != 0) {
-      arm64::Opcode opcode =
-          firstInst ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
-      arm64::Instruction inst;
-      inst.kind =
-          arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk2, 32};
-      result.push_back(inst);
-      firstInst = false;
-    }
-
-    if (chunk3 != 0) {
-      arm64::Opcode opcode =
-          firstInst ? arm64::Opcode::MOVZ : arm64::Opcode::MOVK;
-      arm64::Instruction inst;
-      inst.kind =
-          arm64::MoveWideInst{opcode, dataSize, targetOperand, chunk3, 48};
-      result.push_back(inst);
-      firstInst = false;
-    }
-
-    // If all chunks were zero, use MOVZ #0
-    if (firstInst) {
+    if (firstChunk) {
       arm64::Instruction inst;
       inst.kind = arm64::MoveWideInst{arm64::Opcode::MOVZ, dataSize,
                                       targetOperand, 0, 0};
@@ -583,17 +505,12 @@ InstructionSelector::selectRegRead(const ir::RegRead &regRead,
                                    ir::ValueId resultId) {
   VirtualRegister destReg = assignVirtualRegister(resultId);
 
-  // Load from guest state: reg_value = guestState->x[regNumber]
-  // We assume x0 contains pointer to guest state
-  // Calculate offset: regNumber * REGISTER_SIZE_BYTES (since each register is
-  // 64-bit)
   int32_t offset =
       static_cast<int32_t>(regRead.regNumber * REGISTER_SIZE_BYTES);
 
   arm64::Instruction inst;
   inst.kind = arm64::MemoryInst{arm64::Opcode::LDR, arm64::DataSize::X, destReg,
-                                arm64::Register::X0, // Guest state pointer
-                                offset};
+                                arm64::Register::X0, offset};
 
   return inst;
 }
@@ -602,17 +519,12 @@ arm64::Instruction
 InstructionSelector::selectRegWrite(const ir::RegWrite &regWrite) {
   VirtualRegister valueReg = getVirtualRegisterOrThrow(regWrite.value);
 
-  // Store to guest state: guestState->x[regNumber] = value
-  // Calculate offset: regNumber * REGISTER_SIZE_BYTES (since each register is
-  // 64-bit)
   int32_t offset =
       static_cast<int32_t>(regWrite.regNumber * REGISTER_SIZE_BYTES);
 
   arm64::Instruction inst;
-  inst.kind =
-      arm64::MemoryInst{arm64::Opcode::STR, arm64::DataSize::X, valueReg,
-                        arm64::Register::X0, // Guest state pointer
-                        offset};
+  inst.kind = arm64::MemoryInst{arm64::Opcode::STR, arm64::DataSize::X,
+                                valueReg, arm64::Register::X0, offset};
 
   return inst;
 }
@@ -629,7 +541,6 @@ arm64::DataSize InstructionSelector::irTypeToDataSize(ir::Type type) const {
   case ir::Type::i64:
     return arm64::DataSize::X;
   }
-  return arm64::DataSize::X;
 }
 
 arm64::Opcode
@@ -658,8 +569,7 @@ InstructionSelector::irBinaryOpToARM64(ir::BinaryOpcode opcode) const {
   case ir::BinaryOpcode::Sar:
     return arm64::Opcode::ASR;
   default:
-    // For comparison operations, we'll need to handle them differently
-    return arm64::Opcode::ADD; // Placeholder
+    throw std::runtime_error("Unexpected opcode in irBinaryOpToARM64");
   }
 }
 

@@ -1,5 +1,6 @@
 #include "BinaryTranslator.h"
 #include "ARM64/Encoder.h"
+#include "Error.h"
 #include "Lifter.h"
 #include "Lowering/InstructionSelector.h"
 #include "Lowering/LivenessAnalysis.h"
@@ -8,7 +9,7 @@
 #include "RISCV/Instruction.h"
 #include <iomanip>
 #include <iostream>
-#include <stdexcept>
+#include <sstream>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -33,7 +34,7 @@ void BinaryTranslator::initializeTranslator() {
   void *shadowMem = mmap(nullptr, SHADOW_MEMORY_SIZE, PROT_READ | PROT_WRITE,
                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (shadowMem == MAP_FAILED) {
-    throw std::runtime_error("Failed to allocate shadow memory");
+    throw RuntimeError("Failed to allocate shadow memory");
   }
 
   guestState.shadowMemory = shadowMem;
@@ -50,19 +51,13 @@ void BinaryTranslator::initializeTranslator() {
             << std::dec << std::endl;
 }
 
-bool BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
-  if (!elfReader->loadFile(inputPath)) {
-    std::cerr << "Error loading ELF file: " << elfReader->getErrorMessage()
-              << std::endl;
-    return false;
-  }
+void BinaryTranslator::loadRISCVBinary(const std::string &inputPath) {
+  elfReader->loadFile(inputPath);
 
   const auto &textSection = elfReader->getTextSection();
 
   textSectionData = textSection.data;
   textBaseAddress = textSection.virtualAddress;
-
-  return true;
 }
 
 std::vector<arm64::Instruction>
@@ -102,9 +97,9 @@ BinaryTranslator::translateToARM64(const ir::BasicBlock &irBlock) {
 
 uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   if (!isValidPC(pc)) {
-    std::cerr << "PC out of bounds: 0x" << std::hex << pc << std::dec
-              << std::endl;
-    return 0;
+    std::ostringstream oss;
+    oss << "PC out of bounds: 0x" << std::hex << pc;
+    throw RuntimeError(oss.str());
   }
 
   std::vector<riscv::Instruction> blockInstructions;
@@ -116,9 +111,9 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
     riscv::Instruction inst =
         decoder->decode(textSectionData.data(), offset, currentPC);
     if (!inst.isValid()) {
-      std::cerr << "Invalid instruction at PC=0x" << std::hex << currentPC
-                << std::dec << std::endl;
-      break;
+      std::ostringstream oss;
+      oss << "Invalid instruction at PC=0x" << std::hex << currentPC;
+      throw DecodingError(oss.str());
     }
 
     blockInstructions.push_back(inst);
@@ -132,9 +127,9 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   }
 
   if (blockInstructions.empty()) {
-    std::cerr << "No instructions decoded for block at PC=0x" << std::hex << pc
-              << std::dec << std::endl;
-    return 0;
+    std::ostringstream oss;
+    oss << "No instructions decoded for block at PC=0x" << std::hex << pc;
+    throw RuntimeError(oss.str());
   }
 
   std::cout << "  Lifting " << blockInstructions.size() << " instructions to IR"
@@ -153,8 +148,7 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
   }
 
   if (machineCode.empty()) {
-    std::cerr << "Failed to encode machine code" << std::endl;
-    return 0;
+    throw EncodingError("Failed to encode machine code");
   }
 
   std::cout << "  Executing " << machineCode.size() << " bytes of machine code"
@@ -166,9 +160,7 @@ uint64_t BinaryTranslator::executeBlock(uint64_t pc) {
 
 int BinaryTranslator::executeFunction(const std::string &inputPath,
                                       const std::string &functionName) {
-  if (!loadRISCVBinary(inputPath)) {
-    return -1;
-  }
+  loadRISCVBinary(inputPath);
 
   std::cout << "Text section: VA=0x" << std::hex << textBaseAddress
             << " Size=" << std::dec << textSectionData.size() << " bytes"
@@ -176,9 +168,7 @@ int BinaryTranslator::executeFunction(const std::string &inputPath,
 
   auto functionAddr = elfReader->getFunctionAddress(functionName);
   if (!functionAddr.has_value()) {
-    std::cerr << "Function '" << functionName << "' not found in binary"
-              << std::endl;
-    return -1;
+    throw ELFError("Function '" + functionName + "' not found in binary");
   }
 
   guestState.pc = functionAddr.value();

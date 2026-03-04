@@ -1,4 +1,5 @@
 #include "InstructionSelector.h"
+#include "../Error.h"
 #include "../GuestState.h"
 #include <cstddef>
 
@@ -68,8 +69,8 @@ InstructionSelector::getVirtualRegisterOrThrow(ir::ValueId valueId) const {
   if (vreg.has_value()) {
     return vreg.value();
   }
-  throw std::runtime_error("No virtual register assigned to IR value " +
-                           std::to_string(valueId));
+  throw LoweringError("No virtual register assigned to IR value " +
+                      std::to_string(valueId));
 }
 
 VirtualRegister
@@ -569,7 +570,7 @@ InstructionSelector::irBinaryOpToARM64(ir::BinaryOpcode opcode) const {
   case ir::BinaryOpcode::Sar:
     return arm64::Opcode::ASR;
   default:
-    throw std::runtime_error("Unexpected opcode in irBinaryOpToARM64");
+    throw LoweringError("Unexpected opcode in irBinaryOpToARM64");
   }
 }
 

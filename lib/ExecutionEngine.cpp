@@ -1,6 +1,6 @@
 #include "ExecutionEngine.h"
+#include "Error.h"
 #include <cstring>
-#include <iostream>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -8,10 +8,6 @@ namespace dinorisc {
 
 uint64_t ExecutionEngine::executeBlock(const std::vector<uint8_t> &machineCode,
                                        GuestState *guestState) {
-  if (machineCode.empty()) {
-    return 0;
-  }
-
   size_t pageSize = getpagesize();
   size_t allocSize =
       ((machineCode.size() + pageSize - 1) / pageSize) * pageSize;
@@ -19,17 +15,14 @@ uint64_t ExecutionEngine::executeBlock(const std::vector<uint8_t> &machineCode,
   void *memory = mmap(nullptr, allocSize, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (memory == MAP_FAILED) {
-    std::cerr << "ExecutionEngine: mmap failed" << std::endl;
-    return 0;
+    throw RuntimeError("ExecutionEngine: mmap failed");
   }
 
   std::memcpy(memory, machineCode.data(), machineCode.size());
 
   if (mprotect(memory, allocSize, PROT_READ | PROT_EXEC) != 0) {
-    std::cerr << "ExecutionEngine: Failed to set execute permissions"
-              << std::endl;
     munmap(memory, allocSize);
-    return 0;
+    throw RuntimeError("ExecutionEngine: Failed to set execute permissions");
   }
 
   typedef uint64_t (*CompiledBlockFunctionPtr)(GuestState *);

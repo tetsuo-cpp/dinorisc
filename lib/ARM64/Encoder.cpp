@@ -1,7 +1,7 @@
 #include "Encoder.h"
+#include "../Error.h"
 #include <algorithm>
 #include <cassert>
-#include <stdexcept>
 #include <variant>
 
 namespace dinorisc {
@@ -51,7 +51,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       // Rn=bits9-5, Rd=bits4-0
       uint32_t imm = std::get<Immediate>(inst.src2).value;
       if (imm > 0xFFF)
-        throw std::runtime_error("ADD immediate value too large (>12 bits)");
+        throw EncodingError("ADD immediate value too large (>12 bits)");
       uint32_t sh = 0; // No shift for simple immediate
       encoded = (sf << 31) | (0b00100010 << 23) | (sh << 22) | (imm << 10) |
                 (rn << 5) | rd;
@@ -74,7 +74,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       // Rn=bits9-5, Rd=bits4-0
       uint32_t imm = std::get<Immediate>(inst.src2).value;
       if (imm > 0xFFF)
-        throw std::runtime_error("SUB immediate value too large (>12 bits)");
+        throw EncodingError("SUB immediate value too large (>12 bits)");
       uint32_t sh = 0; // No shift for simple immediate
       encoded = (sf << 31) | (0b10100010 << 23) | (sh << 22) | (imm << 10) |
                 (rn << 5) | rd;
@@ -92,7 +92,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
   }
   case Opcode::AND: {
     if (isImmediate(inst.src2)) {
-      throw std::runtime_error("AND with immediate not supported");
+      throw EncodingError("AND with immediate not supported");
     }
     // AND (shifted register): sf 0 0 0 1 0 1 0 shift 0 Rm imm6 Rn Rd
     // sf=bit31, bits30-25=000101, shift=bits24-23, bit22=0, Rm=bits21-16,
@@ -106,7 +106,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
   }
   case Opcode::ORR: {
     if (isImmediate(inst.src2)) {
-      throw std::runtime_error("ORR with immediate not supported");
+      throw EncodingError("ORR with immediate not supported");
     }
     // ORR (shifted register): sf 0 1 0 1 0 1 0 shift 0 Rm imm6 Rn Rd
     // sf=bit31, bits30-25=010101, shift=bits24-23, bit22=0, Rm=bits21-16,
@@ -120,7 +120,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
   }
   case Opcode::EOR: {
     if (isImmediate(inst.src2)) {
-      throw std::runtime_error("EOR with immediate not supported");
+      throw EncodingError("EOR with immediate not supported");
     }
     // EOR (shifted register): sf 1 1 0 1 0 1 0 shift 0 Rm imm6 Rn Rd
     // sf=bit31, bits30-25=110101, shift=bits24-23, bit22=0, Rm=bits21-16,
@@ -134,7 +134,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
   }
   case Opcode::MUL: {
     if (isImmediate(inst.src2)) {
-      throw std::runtime_error("MUL with immediate not supported");
+      throw EncodingError("MUL with immediate not supported");
     }
     // MUL is alias of MADD: sf 0 0 1 1 0 1 1 0 0 0 Rm 0 Ra Rn Rd
     // sf=bit31, bits30-21=0011011000, Rm=bits20-16, bits15-10=000000 (Ra=XZR),
@@ -153,7 +153,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       // Rn=bits9-5, Rt=bits4-0 (Rt=31 for XZR)
       uint32_t imm = std::get<Immediate>(inst.src2).value;
       if (imm > 0xFFF)
-        throw std::runtime_error("CMP immediate value too large (>12 bits)");
+        throw EncodingError("CMP immediate value too large (>12 bits)");
       uint32_t sh = 0;   // No shift for simple immediate
       uint32_t xzr = 31; // XZR register
       encoded = (sf << 31) | (0b11100010 << 23) | (sh << 22) | (imm << 10) |
@@ -180,7 +180,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       uint64_t shiftAmount = std::get<Immediate>(inst.src2).value;
       uint32_t datasize = (sf == 1) ? 64 : 32;
       if (shiftAmount >= datasize)
-        throw std::runtime_error("LSL shift amount out of range");
+        throw EncodingError("LSL shift amount out of range");
       uint32_t N = sf;
       uint32_t immr = (datasize - shiftAmount) % datasize;
       uint32_t imms = datasize - 1 - shiftAmount;
@@ -202,7 +202,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       uint64_t shiftAmount = std::get<Immediate>(inst.src2).value;
       uint32_t datasize = (sf == 1) ? 64 : 32;
       if (shiftAmount >= datasize)
-        throw std::runtime_error("LSR shift amount out of range");
+        throw EncodingError("LSR shift amount out of range");
       uint32_t N = sf;
       uint32_t immr = shiftAmount;
       uint32_t imms = datasize - 1;
@@ -224,7 +224,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       uint64_t shiftAmount = std::get<Immediate>(inst.src2).value;
       uint32_t datasize = (sf == 1) ? 64 : 32;
       if (shiftAmount >= datasize)
-        throw std::runtime_error("ASR shift amount out of range");
+        throw EncodingError("ASR shift amount out of range");
       uint32_t N = sf;
       uint32_t immr = shiftAmount;
       uint32_t imms = datasize - 1;
@@ -240,7 +240,7 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
     break;
   }
   default:
-    throw std::runtime_error("Unsupported three-operand instruction opcode");
+    throw EncodingError("Unsupported three-operand instruction opcode");
   }
 
   return encoded;
@@ -256,7 +256,7 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     if (isImmediate(inst.src)) {
       uint64_t imm = std::get<Immediate>(inst.src).value;
       if (imm > 0xFFFF) {
-        throw std::runtime_error("MOV immediate value too large (>16 bits)");
+        throw EncodingError("MOV immediate value too large (>16 bits)");
       }
       // MOVZ encoding: sf 1 0 0 1 0 1 0 hw imm16 Rd
       uint32_t hw = 0; // No shift for simple immediate
@@ -318,13 +318,13 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
   }
   case Opcode::MOVN: {
     if (!isImmediate(inst.src)) {
-      throw std::runtime_error("MOVN only supports immediate operands");
+      throw EncodingError("MOVN only supports immediate operands");
     }
     // MOVN encoding: sf 0 0 1 0 0 1 0 1 hw imm16 Rd
     // Result = ~(imm16 << (hw*16))
     uint64_t imm = std::get<Immediate>(inst.src).value;
     if (imm > 0xFFFF) {
-      throw std::runtime_error("MOVN immediate value too large (>16 bits)");
+      throw EncodingError("MOVN immediate value too large (>16 bits)");
     }
     uint32_t hw = 0; // No shift for now
     encoded = (sf << 31) | (0b00100101 << 23) | (hw << 21) |
@@ -340,7 +340,7 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
       // This is SUBS with Rt=XZR (compare is subtract with result discarded)
       uint32_t imm = std::get<Immediate>(inst.src).value;
       if (imm > 0xFFF)
-        throw std::runtime_error("CMP immediate value too large (>12 bits)");
+        throw EncodingError("CMP immediate value too large (>12 bits)");
       uint32_t sh = 0;   // No shift for simple immediate
       uint32_t xzr = 31; // XZR register
       encoded = (sf << 31) | (0b11100010 << 23) | (sh << 22) | (imm << 10) |
@@ -358,7 +358,7 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     break;
   }
   default:
-    throw std::runtime_error("Unsupported two-operand instruction opcode");
+    throw EncodingError("Unsupported two-operand instruction opcode");
   }
 
   return encoded;
@@ -398,7 +398,7 @@ uint32_t Encoder::encodeMemoryInst(const MemoryInst &inst) {
         encoded = (size << 30) | (0b11100101 << 22) | (scaledOffset << 10) |
                   (rn << 5) | rt;
       } else {
-        throw std::runtime_error("LDR scaled offset too large (>4095)");
+        throw EncodingError("LDR scaled offset too large (>4095)");
       }
     } else if (offset >= -256 && offset <= 255) {
       // LDR (immediate, pre/post-index): size 1 1 1 0 0 0 0 0 imm9 1 1 Rn Rt
@@ -406,7 +406,7 @@ uint32_t Encoder::encodeMemoryInst(const MemoryInst &inst) {
       encoded = (size << 30) | (0b11100000 << 22) | ((offset & 0x1FF) << 12) |
                 (0b11 << 10) | (rn << 5) | rt;
     } else {
-      throw std::runtime_error("LDR offset out of range");
+      throw EncodingError("LDR offset out of range");
     }
     break;
   }
@@ -420,7 +420,7 @@ uint32_t Encoder::encodeMemoryInst(const MemoryInst &inst) {
         encoded = (size << 30) | (0b11100100 << 22) | (scaledOffset << 10) |
                   (rn << 5) | rt;
       } else {
-        throw std::runtime_error("STR scaled offset too large (>4095)");
+        throw EncodingError("STR scaled offset too large (>4095)");
       }
     } else if (offset >= -256 && offset <= 255) {
       // STR (immediate, pre/post-index): size 1 1 1 0 0 0 0 0 imm9 0 1 Rn Rt
@@ -428,12 +428,12 @@ uint32_t Encoder::encodeMemoryInst(const MemoryInst &inst) {
       encoded = (size << 30) | (0b11100000 << 22) | ((offset & 0x1FF) << 12) |
                 (0b01 << 10) | (rn << 5) | rt;
     } else {
-      throw std::runtime_error("STR offset out of range");
+      throw EncodingError("STR offset out of range");
     }
     break;
   }
   default:
-    throw std::runtime_error("Unsupported memory instruction opcode");
+    throw EncodingError("Unsupported memory instruction opcode");
   }
 
   return encoded;
@@ -444,7 +444,7 @@ uint32_t Encoder::encodeBranchInst(const BranchInst &inst) {
   int64_t offset = static_cast<int64_t>(inst.target);
 
   if (offset < -0x2000000 || offset > 0x1FFFFFF) {
-    throw std::runtime_error("Branch target out of range");
+    throw EncodingError("Branch target out of range");
   }
 
   uint32_t imm26 = (offset >> 2) & 0x3FFFFFF;
@@ -464,7 +464,7 @@ uint32_t Encoder::encodeBranchInst(const BranchInst &inst) {
     // B.cond (conditional branch): 0 1 0 1 0 1 0 0 imm19 0 cond
     // bits31-25=0101010, imm19=bits23-5, bit4=0, cond=bits3-0
     if (offset < -0x40000 || offset > 0x3FFFF) {
-      throw std::runtime_error("Conditional branch target out of range");
+      throw EncodingError("Conditional branch target out of range");
     }
     uint32_t imm19 = (offset >> 2) & 0x7FFFF;
     uint32_t cond = getConditionCode(inst.opcode);
@@ -472,7 +472,7 @@ uint32_t Encoder::encodeBranchInst(const BranchInst &inst) {
     break;
   }
   default:
-    throw std::runtime_error("Unsupported branch instruction opcode");
+    throw EncodingError("Unsupported branch instruction opcode");
   }
 
   return encoded;
@@ -487,7 +487,7 @@ uint32_t Encoder::encodeMoveWideInst(const MoveWideInst &inst) {
   // #48
   uint32_t hw = inst.shift / 16;
   if (hw > 3) {
-    throw std::runtime_error("Invalid shift amount for move wide instruction");
+    throw EncodingError("Invalid shift amount for move wide instruction");
   }
 
   switch (inst.opcode) {
@@ -504,7 +504,7 @@ uint32_t Encoder::encodeMoveWideInst(const MoveWideInst &inst) {
               (static_cast<uint32_t>(inst.imm16) << 5) | rd;
     break;
   default:
-    throw std::runtime_error("Unsupported move wide instruction opcode");
+    throw EncodingError("Unsupported move wide instruction opcode");
   }
 
   return encoded;
@@ -519,10 +519,10 @@ uint32_t Encoder::encodeRegister(const Operand &operand) {
     return static_cast<uint32_t>(reg);
   }
   if (std::holds_alternative<VirtualRegister>(operand)) {
-    throw std::runtime_error(
+    throw EncodingError(
         "Cannot encode virtual register - register allocation required");
   }
-  throw std::runtime_error("Invalid operand type for register encoding");
+  throw EncodingError("Invalid operand type for register encoding");
 }
 
 bool Encoder::isImmediate(const Operand &operand) {
@@ -548,7 +548,7 @@ uint32_t Encoder::getConditionCode(Opcode opcode) {
   case Opcode::B_GE:
     return 0b1010;
   default:
-    throw std::runtime_error("Unsupported condition code opcode");
+    throw EncodingError("Unsupported condition code opcode");
   }
 }
 
@@ -570,7 +570,7 @@ uint32_t Encoder::encodeConditionalInst(const ConditionalInst &inst) {
     break;
   }
   default:
-    throw std::runtime_error("Unsupported conditional instruction");
+    throw EncodingError("Unsupported conditional instruction");
   }
 
   return encoded;
@@ -586,7 +586,7 @@ Encoder::encodeConditionalSelectInst(const ConditionalSelectInst &inst) {
   switch (inst.opcode) {
   case Opcode::CSEL: {
     if (isImmediate(inst.src1) || isImmediate(inst.src2)) {
-      throw std::runtime_error("CSEL with immediate operands not supported");
+      throw EncodingError("CSEL with immediate operands not supported");
     }
     // CSEL: sf 0 0 1 1 0 1 0 1 0 0 Rm cond 0 0 Rn Rd
     // sf=bit31, bits30-21=0011010100, Rm=bits20-16, cond=bits15-12,
@@ -598,7 +598,7 @@ Encoder::encodeConditionalSelectInst(const ConditionalSelectInst &inst) {
     break;
   }
   default:
-    throw std::runtime_error("Unsupported conditional select instruction");
+    throw EncodingError("Unsupported conditional select instruction");
   }
 
   return encoded;

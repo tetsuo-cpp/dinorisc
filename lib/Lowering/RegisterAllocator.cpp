@@ -1,4 +1,5 @@
 #include "RegisterAllocator.h"
+#include "../Error.h"
 #include <algorithm>
 #include <cassert>
 
@@ -75,9 +76,8 @@ RegisterAllocator::getPhysicalRegisterOrThrow(VirtualRegister vreg) const {
   if (reg.has_value()) {
     return reg.value();
   }
-  throw std::runtime_error(
-      "No physical register assigned to virtual register " +
-      std::to_string(vreg));
+  throw LoweringError("No physical register assigned to virtual register " +
+                      std::to_string(vreg));
 }
 
 std::optional<arm64::Register> RegisterAllocator::getNextAvailableRegister() {

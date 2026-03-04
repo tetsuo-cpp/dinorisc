@@ -1,4 +1,5 @@
 #include "RISCV/Decoder.h"
+#include "Error.h"
 #include "RISCV/Instruction.h"
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -346,12 +347,14 @@ TEST_CASE("RV64IDecoder Invalid Instructions", "[decoder][invalid]") {
 
   SECTION("Invalid opcode") {
     auto data = toBytes(0x00000007);
-    REQUIRE_THROWS_AS(decoder.decode(data.data(), 0, 0), std::runtime_error);
+    REQUIRE_THROWS_AS(decoder.decode(data.data(), 0, 0),
+                      dinorisc::DecodingError);
   }
 
   SECTION("Invalid funct3 for valid opcode") {
     auto data = toBytes(0x0000001F);
-    REQUIRE_THROWS_AS(decoder.decode(data.data(), 0, 0), std::runtime_error);
+    REQUIRE_THROWS_AS(decoder.decode(data.data(), 0, 0),
+                      dinorisc::DecodingError);
   }
 }
 

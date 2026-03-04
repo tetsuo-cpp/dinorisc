@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Error.h"
 #include <cstdint>
 #include <elfio/elfio.hpp>
 #include <optional>
@@ -17,7 +18,7 @@ class ELFReader {
 public:
   ELFReader();
 
-  bool loadFile(const std::string &filePath);
+  void loadFile(const std::string &filePath);
 
   uint64_t getEntryPoint() const { return entryPoint; }
   const TextSection &getTextSection() const { return textSection; }
@@ -26,13 +27,10 @@ public:
   std::optional<uint64_t>
   getFunctionAddress(const std::string &functionName) const;
 
-  std::string getErrorMessage() const { return errorMessage; }
-
 private:
   ELFIO::elfio reader;
   uint64_t entryPoint;
   TextSection textSection;
-  std::string errorMessage;
 };
 
 } // namespace dinorisc

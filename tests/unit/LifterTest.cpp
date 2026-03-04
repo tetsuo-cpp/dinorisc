@@ -741,7 +741,8 @@ TEST_CASE("Lifter Edge Cases and Error Handling", "[lifter][edge-cases]") {
   SECTION("Unsupported instruction throws exception") {
     auto inst = createInstruction(riscv::Instruction::Opcode::INVALID, {});
 
-    REQUIRE_THROWS_AS(lifter.liftBasicBlock({inst}), std::runtime_error);
+    REQUIRE_THROWS_AS(lifter.liftBasicBlock({inst}),
+                      dinorisc::UnsupportedInstructionError);
   }
 
   SECTION("Multiple consecutive terminators") {

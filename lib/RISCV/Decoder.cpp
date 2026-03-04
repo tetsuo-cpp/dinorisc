@@ -1,6 +1,6 @@
 #include "Decoder.h"
+#include "../Error.h"
 #include <sstream>
-#include <stdexcept>
 #include <string>
 
 namespace dinorisc {
@@ -212,7 +212,7 @@ Decoder::determineOpcode(const DecodedFields &fields) const {
   oss << "Unrecognized RISC-V instruction: opcode=0x" << std::hex
       << fields.opcode << " funct3=0x" << fields.funct3 << " funct7=0x"
       << fields.funct7;
-  throw std::runtime_error(oss.str());
+  throw DecodingError(oss.str());
 }
 
 std::vector<Instruction::Operand>
@@ -306,11 +306,11 @@ Decoder::extractOperands(const DecodedFields &fields,
     return {};
 
   case Instruction::Opcode::INVALID:
-    throw std::runtime_error("Cannot extract operands for invalid instruction");
+    throw DecodingError("Cannot extract operands for invalid instruction");
 
   default:
-    throw std::runtime_error("Unhandled opcode in extractOperands: " +
-                             std::to_string(static_cast<int>(opcode)));
+    throw DecodingError("Unhandled opcode in extractOperands: " +
+                        std::to_string(static_cast<int>(opcode)));
   }
 }
 

@@ -1,3 +1,4 @@
+#include "Error.h"
 #include "Lowering/InstructionSelector.h"
 #include "Lowering/LivenessAnalysis.h"
 #include "Lowering/RegisterAllocator.h"
@@ -149,7 +150,7 @@ std::vector<arm64::Instruction> lowerAndVerify(IRBuilder &builder) {
   RegisterAllocator allocator;
   bool success = allocator.allocateRegisters(instructions, liveIntervals);
   if (!success) {
-    throw std::runtime_error("Register allocation failed");
+    throw dinorisc::LoweringError("Register allocation failed");
   }
 
   REQUIRE(!instructions.empty());

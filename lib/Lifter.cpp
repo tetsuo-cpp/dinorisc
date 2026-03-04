@@ -1,5 +1,4 @@
 #include "Lifter.h"
-#include <stdexcept>
 
 namespace dinorisc {
 
@@ -164,7 +163,8 @@ void Lifter::liftSingleInstruction(const riscv::Instruction &inst) {
   }
 
   default:
-    throw UnsupportedInstructionError(inst);
+    throw UnsupportedInstructionError("Unsupported RISC-V instruction: " +
+                                      inst.toString());
   }
 }
 
@@ -372,7 +372,8 @@ ir::Terminator Lifter::liftTerminator(const riscv::Instruction &inst,
   }
 
   default:
-    throw UnsupportedInstructionError(inst);
+    throw UnsupportedInstructionError("Unsupported RISC-V instruction: " +
+                                      inst.toString());
   }
 }
 

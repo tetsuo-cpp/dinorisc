@@ -1,4 +1,5 @@
 #include "../../lib/ARM64/Encoder.h"
+#include "../../lib/Error.h"
 #include <catch2/catch_test_macros.hpp>
 
 using namespace dinorisc::arm64;
@@ -100,13 +101,13 @@ TEST_CASE("Encoder - Error cases", "[encoder]") {
     REQUIRE_THROWS_AS(
         encode({ThreeOperandInst{Opcode::ADD, DataSize::X, Register::X0,
                                  Register::X1, Immediate{0x1000}}}),
-        std::runtime_error);
+        dinorisc::EncodingError);
   }
 
   SECTION("Virtual register should fail") {
     REQUIRE_THROWS_AS(
         encode({ThreeOperandInst{Opcode::ADD, DataSize::X, VirtualRegister{42},
                                  Register::X1, Register::X2}}),
-        std::runtime_error);
+        dinorisc::EncodingError);
   }
 }

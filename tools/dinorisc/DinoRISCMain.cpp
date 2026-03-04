@@ -1,4 +1,5 @@
 #include "BinaryTranslator.h"
+#include "Error.h"
 #include <iostream>
 #include <string>
 
@@ -33,19 +34,18 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  dinorisc::BinaryTranslator translator;
+  try {
+    dinorisc::BinaryTranslator translator;
 
-  translator.setArgumentRegisters(functionArgs);
+    translator.setArgumentRegisters(functionArgs);
 
-  // Execute specific function and return its result
-  int functionResult = translator.executeFunction(inputPath, functionName);
-  if (functionResult == -1) {
-    std::cerr << "Error: Failed to load or execute function " << functionName
+    int functionResult = translator.executeFunction(inputPath, functionName);
+
+    std::cout << "Function " << functionName << " returned: " << functionResult
               << "\n";
+    return 0;
+  } catch (const dinorisc::Error &e) {
+    std::cerr << "Error: " << e.what() << "\n";
     return 1;
   }
-
-  std::cout << "Function " << functionName << " returned: " << functionResult
-            << "\n";
-  return 0;
 }

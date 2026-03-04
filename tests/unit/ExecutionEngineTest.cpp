@@ -1,5 +1,6 @@
 #include "../../lib/ExecutionEngine.h"
 #include "../../lib/ARM64/Encoder.h"
+#include "../../lib/Error.h"
 #include "../../lib/GuestState.h"
 #include <catch2/catch_test_macros.hpp>
 #include <sys/mman.h>
@@ -216,9 +217,8 @@ TEST_CASE("ExecutionEngine - Edge cases", "[execution]") {
     std::vector<uint8_t> emptyCode;
     auto state = createInitialState();
 
-    uint64_t nextPC = engine.executeBlock(emptyCode, &state);
-
-    REQUIRE(nextPC == 0);
+    REQUIRE_THROWS_AS(engine.executeBlock(emptyCode, &state),
+                      dinorisc::RuntimeError);
   }
 
   SECTION("Single RET instruction") {

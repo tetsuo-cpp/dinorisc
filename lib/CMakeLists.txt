@@ -16,6 +16,7 @@ set(DINORISC_LIB_SOURCES
 set(DINORISC_LIB_HEADERS
   BinaryTranslator.h
   ELFReader.h
+  Error.h
   ExecutionEngine.h
   GuestState.h
   Lifter.h

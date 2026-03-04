@@ -39,7 +39,7 @@ private:
   GuestState guestState;
 
   void initializeTranslator();
-  bool loadRISCVBinary(const std::string &inputPath);
+  void loadRISCVBinary(const std::string &inputPath);
   std::vector<arm64::Instruction>
   translateToARM64(const ir::BasicBlock &irBlock);
   uint64_t executeBlock(uint64_t pc);

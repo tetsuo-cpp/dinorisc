@@ -1,20 +1,13 @@
 #pragma once
 
+#include "Error.h"
 #include "IR/IR.h"
 #include "RISCV/Instruction.h"
-#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace dinorisc {
-
-class UnsupportedInstructionError : public std::runtime_error {
-public:
-  explicit UnsupportedInstructionError(const riscv::Instruction &inst)
-      : std::runtime_error("Unsupported RISC-V instruction: " +
-                           inst.toString()) {}
-};
 
 class Lifter {
 public:

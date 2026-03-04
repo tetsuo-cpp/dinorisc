@@ -24,17 +24,10 @@ private:
   int32_t signExtend(uint32_t value, int bits) const;
 
   // High-level decoding logic
-  Instruction::Opcode determineOpcode(const DecodedFields &fields,
-                                      uint32_t raw) const;
+  Instruction::Opcode determineOpcode(const DecodedFields &fields) const;
   std::vector<Instruction::Operand> extractOperands(const DecodedFields &fields,
                                                     Instruction::Opcode opcode,
                                                     uint32_t raw) const;
-
-  // Operand extraction helpers
-  std::vector<Instruction::Operand>
-  extractRTypeOperands(const DecodedFields &fields) const;
-  std::vector<Instruction::Operand>
-  extractITypeOperands(const DecodedFields &fields, uint32_t raw) const;
 
   // Format-specific immediate extraction
   int32_t extractITypeImmediate(uint32_t raw) const;

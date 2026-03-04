@@ -1,4 +1,5 @@
 #include "Decoder.h"
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -30,7 +31,7 @@ Instruction Decoder::decode(const uint8_t *data, size_t offset,
   DecodedFields fields = extractFields(rawInstruction);
 
   // Determine the specific opcode
-  Instruction::Opcode opcode = determineOpcode(fields, rawInstruction);
+  Instruction::Opcode opcode = determineOpcode(fields);
 
   // Extract operands based on the opcode
   std::vector<Instruction::Operand> operands =
@@ -60,8 +61,7 @@ int32_t Decoder::signExtend(uint32_t value, int bits) const {
   return static_cast<int32_t>(value);
 }
 
-Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
-                                             uint32_t raw) const {
+Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields) const {
   switch (fields.opcode) {
   case 0x33: // OP
     switch (fields.funct3) {
@@ -198,9 +198,7 @@ Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
 
   case 0x73: // SYSTEM
     if (fields.funct3 == 0x0 && fields.rd == 0x0 && fields.rs1 == 0x0) {
-      // For ECALL and EBREAK, check the immediate field (bits 31-20)
-      // Don't check rs2 since it's part of the immediate
-      uint32_t imm = (raw >> 20) & IMM_12_MASK;
+      uint32_t imm = fields.rs2 | (fields.funct7 << 5);
       if (imm == 0x0)
         return Instruction::Opcode::ECALL;
       if (imm == 0x1)
@@ -209,21 +207,11 @@ Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields,
     break;
   }
 
-  throw std::runtime_error("Unrecognized RISC-V instruction: 0x" +
-                           std::to_string(raw));
-}
-
-std::vector<Instruction::Operand>
-Decoder::extractRTypeOperands(const DecodedFields &fields) const {
-  return {Instruction::Register(fields.rd), Instruction::Register(fields.rs1),
-          Instruction::Register(fields.rs2)};
-}
-
-std::vector<Instruction::Operand>
-Decoder::extractITypeOperands(const DecodedFields &fields, uint32_t raw) const {
-  return {
-      Instruction::Register(fields.rd), Instruction::Register(fields.rs1),
-      Instruction::Immediate(static_cast<int64_t>(extractITypeImmediate(raw)))};
+  std::ostringstream oss;
+  oss << "Unrecognized RISC-V instruction: opcode=0x" << std::hex
+      << fields.opcode << " funct3=0x" << fields.funct3 << " funct7=0x"
+      << fields.funct7;
+  throw std::runtime_error(oss.str());
 }
 
 std::vector<Instruction::Operand>
@@ -246,7 +234,8 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::SLLW:
   case Instruction::Opcode::SRLW:
   case Instruction::Opcode::SRAW:
-    return extractRTypeOperands(fields);
+    return {Instruction::Register(fields.rd), Instruction::Register(fields.rs1),
+            Instruction::Register(fields.rs2)};
 
   // I-type: rd, rs1, imm
   case Instruction::Opcode::ADDI:
@@ -271,7 +260,9 @@ Decoder::extractOperands(const DecodedFields &fields,
   case Instruction::Opcode::LBU:
   case Instruction::Opcode::LHU:
   case Instruction::Opcode::LWU:
-    return extractITypeOperands(fields, raw);
+    return {Instruction::Register(fields.rd), Instruction::Register(fields.rs1),
+            Instruction::Immediate(
+                static_cast<int64_t>(extractITypeImmediate(raw)))};
 
   // Store: rs1, rs2, offset
   case Instruction::Opcode::SB:

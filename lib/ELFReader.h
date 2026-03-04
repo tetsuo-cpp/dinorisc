@@ -10,7 +10,6 @@ namespace dinorisc {
 
 struct TextSection {
   uint64_t virtualAddress;
-  uint64_t size;
   std::vector<uint8_t> data;
 };
 

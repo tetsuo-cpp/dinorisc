@@ -54,7 +54,6 @@ bool ELFReader::loadFile(const std::string &filePath) {
 
   // Extract .text section data
   textSection.virtualAddress = textSec->get_address();
-  textSection.size = textSec->get_size();
 
   const char *data = textSec->get_data();
   if (!data) {
@@ -62,14 +61,13 @@ bool ELFReader::loadFile(const std::string &filePath) {
     return false;
   }
 
-  textSection.data.assign(data, data + textSection.size);
+  textSection.data.assign(data, data + textSec->get_size());
 
   return true;
 }
 
 std::optional<uint64_t>
 ELFReader::getFunctionAddress(const std::string &functionName) const {
-
   // Look for function symbol in symbol table
   for (const auto &sec : reader.sections) {
     if (sec->get_type() == ELFIO::SHT_SYMTAB ||

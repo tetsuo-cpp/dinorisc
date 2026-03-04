@@ -35,10 +35,7 @@ int main(int argc, char *argv[]) {
 
   dinorisc::BinaryTranslator translator;
 
-  // Set up function arguments if provided
-  if (!functionArgs.empty()) {
-    translator.setArgumentRegisters(functionArgs);
-  }
+  translator.setArgumentRegisters(functionArgs);
 
   // Execute specific function and return its result
   int functionResult = translator.executeFunction(inputPath, functionName);
@@ -50,5 +47,5 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Function " << functionName << " returned: " << functionResult
             << "\n";
-  return 0; // Return 0 for successful execution
+  return 0;
 }

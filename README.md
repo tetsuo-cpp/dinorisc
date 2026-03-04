@@ -113,8 +113,8 @@ ninja -C build && ctest --test-dir build --output-on-failure
 ninja -C build test-e2e
 ```
 
-If a `.env` file exists in the project root, source it before running tests:
+E2E tests require a `clang` with RISC-V target support on your `PATH`. On macOS with Homebrew, the default Apple Clang doesn't include it — use the LLVM formula instead:
 
 ```bash
-source .env && ctest --test-dir build --output-on-failure
+export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 ```

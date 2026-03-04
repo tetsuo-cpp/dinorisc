@@ -61,7 +61,7 @@ TEST_CASE("ExecutionEngine - Basic arithmetic operations", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x100C}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -101,7 +101,7 @@ TEST_CASE("ExecutionEngine - Basic arithmetic operations", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x1010}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -136,7 +136,7 @@ TEST_CASE("ExecutionEngine - Basic arithmetic operations", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x1014}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -170,7 +170,7 @@ TEST_CASE("ExecutionEngine - Basic arithmetic operations", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x1018}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -207,7 +207,7 @@ TEST_CASE("ExecutionEngine - Data movement", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x101C}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -241,7 +241,7 @@ TEST_CASE("ExecutionEngine - Data movement", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x1020}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -273,7 +273,7 @@ TEST_CASE("ExecutionEngine - Memory operations", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x1024}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -328,7 +328,7 @@ TEST_CASE("ExecutionEngine - Complex sequences", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x1028}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);
@@ -367,7 +367,7 @@ TEST_CASE("ExecutionEngine - Edge cases", "[execution]") {
         Instruction{TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
                                    Immediate{0x102C}}},
         Instruction{TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
-                                   Immediate{0}}}};
+                                   Register::X30}}};
 
     auto machineCode =
         ExecutionEngineTestHelper::createMachineCode(instructions);

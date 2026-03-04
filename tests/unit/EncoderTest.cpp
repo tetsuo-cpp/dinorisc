@@ -3,226 +3,110 @@
 
 using namespace dinorisc::arm64;
 
-TEST_CASE("Encoder - Three operand instructions", "[encoder]") {
+static uint32_t encode(const Instruction &inst) {
   Encoder encoder;
+  auto bytes = encoder.encodeInstruction(inst);
+  REQUIRE(bytes.size() == 4);
+  return (bytes[3] << 24) | (bytes[2] << 16) | (bytes[1] << 8) | bytes[0];
+}
 
+TEST_CASE("Encoder - Three operand instructions", "[encoder]") {
   SECTION("ADD with registers") {
-    ThreeOperandInst inst{Opcode::ADD, DataSize::X, Register::X0, Register::X1,
-                          Register::X2};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x8B020020);
+    REQUIRE(encode({ThreeOperandInst{Opcode::ADD, DataSize::X, Register::X0,
+                                     Register::X1, Register::X2}}) ==
+            0x8B020020);
   }
 
   SECTION("ADD with immediate") {
-    ThreeOperandInst inst{Opcode::ADD, DataSize::X, Register::X0, Register::X1,
-                          Immediate{42}};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x9100A820);
+    REQUIRE(encode({ThreeOperandInst{Opcode::ADD, DataSize::X, Register::X0,
+                                     Register::X1, Immediate{42}}}) ==
+            0x9100A820);
   }
 
   SECTION("SUB with registers") {
-    ThreeOperandInst inst{Opcode::SUB, DataSize::W, Register::X3, Register::X4,
-                          Register::X5};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x4B050083);
+    REQUIRE(encode({ThreeOperandInst{Opcode::SUB, DataSize::W, Register::X3,
+                                     Register::X4, Register::X5}}) ==
+            0x4B050083);
   }
 
   SECTION("AND with registers") {
-    ThreeOperandInst inst{Opcode::AND, DataSize::X, Register::X0, Register::X1,
-                          Register::X2};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x8A020020);
+    REQUIRE(encode({ThreeOperandInst{Opcode::AND, DataSize::X, Register::X0,
+                                     Register::X1, Register::X2}}) ==
+            0x8A020020);
   }
 
   SECTION("MUL with registers") {
-    ThreeOperandInst inst{Opcode::MUL, DataSize::X, Register::X0, Register::X1,
-                          Register::X2};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x9B027C20);
+    REQUIRE(encode({ThreeOperandInst{Opcode::MUL, DataSize::X, Register::X0,
+                                     Register::X1, Register::X2}}) ==
+            0x9B027C20);
   }
 }
 
 TEST_CASE("Encoder - Two operand instructions", "[encoder]") {
-  Encoder encoder;
-
   SECTION("MOV with immediate") {
-    TwoOperandInst inst{Opcode::MOV, DataSize::X, Register::X0,
-                        Immediate{0x1234}};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0xD2824680);
+    REQUIRE(encode({TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
+                                   Immediate{0x1234}}}) == 0xD2824680);
   }
 
   SECTION("MOV with register") {
-    TwoOperandInst inst{Opcode::MOV, DataSize::X, Register::X0, Register::X1};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0xAA0103E0);
+    REQUIRE(encode({TwoOperandInst{Opcode::MOV, DataSize::X, Register::X0,
+                                   Register::X1}}) == 0xAA0103E0);
   }
 
   SECTION("SXTB") {
-    TwoOperandInst inst{Opcode::SXTB, DataSize::X, Register::X0, Register::X1};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x93401C20);
+    REQUIRE(encode({TwoOperandInst{Opcode::SXTB, DataSize::X, Register::X0,
+                                   Register::X1}}) == 0x93401C20);
   }
 
   SECTION("RET") {
-    TwoOperandInst inst{Opcode::RET, DataSize::X, Register::X0, Immediate{0}};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0xD65F03C0);
+    REQUIRE(encode({TwoOperandInst{Opcode::RET, DataSize::X, Register::X0,
+                                   Register::X30}}) == 0xD65F03C0);
   }
 }
 
 TEST_CASE("Encoder - Memory instructions", "[encoder]") {
-  Encoder encoder;
-
   SECTION("LDR with positive offset") {
-    MemoryInst inst{Opcode::LDR, DataSize::X, Register::X0, Register::X1, 8};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0xF9400420);
+    REQUIRE(encode({MemoryInst{Opcode::LDR, DataSize::X, Register::X0,
+                               Register::X1, 8}}) == 0xF9400420);
   }
 
   SECTION("STR with zero offset") {
-    MemoryInst inst{Opcode::STR, DataSize::W, Register::X2, Register::X3, 0};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0xB9000062);
+    REQUIRE(encode({MemoryInst{Opcode::STR, DataSize::W, Register::X2,
+                               Register::X3, 0}}) == 0xB9000062);
   }
 
   SECTION("LDR byte") {
-    MemoryInst inst{Opcode::LDR, DataSize::B, Register::X0, Register::X1, 4};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x39401020);
+    REQUIRE(encode({MemoryInst{Opcode::LDR, DataSize::B, Register::X0,
+                               Register::X1, 4}}) == 0x39401020);
   }
 }
 
 TEST_CASE("Encoder - Branch instructions", "[encoder]") {
-  Encoder encoder;
-
   SECTION("Unconditional branch") {
-    BranchInst inst{Opcode::B, 0x1000};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x14000400);
+    REQUIRE(encode({BranchInst{Opcode::B, 0x1000}}) == 0x14000400);
   }
 
   SECTION("Conditional branch equal") {
-    BranchInst inst{Opcode::B_EQ, 0x100};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x54000800);
+    REQUIRE(encode({BranchInst{Opcode::B_EQ, 0x100}}) == 0x54000800);
   }
 
   SECTION("Conditional branch not equal") {
-    BranchInst inst{Opcode::B_NE, 0x80};
-    Instruction instruction{inst};
-
-    auto encoded = encoder.encodeInstruction(instruction);
-    REQUIRE(encoded.size() == 4);
-
-    uint32_t value = (encoded[3] << 24) | (encoded[2] << 16) |
-                     (encoded[1] << 8) | encoded[0];
-    REQUIRE(value == 0x54000401);
+    REQUIRE(encode({BranchInst{Opcode::B_NE, 0x80}}) == 0x54000401);
   }
 }
 
 TEST_CASE("Encoder - Error cases", "[encoder]") {
-  Encoder encoder;
-
   SECTION("Invalid immediate too large") {
-    ThreeOperandInst inst{Opcode::ADD, DataSize::X, Register::X0, Register::X1,
-                          Immediate{0x1000}};
-    Instruction instruction{inst};
-
-    REQUIRE_THROWS_AS(encoder.encodeInstruction(instruction),
-                      std::runtime_error);
+    REQUIRE_THROWS_AS(
+        encode({ThreeOperandInst{Opcode::ADD, DataSize::X, Register::X0,
+                                 Register::X1, Immediate{0x1000}}}),
+        std::runtime_error);
   }
 
   SECTION("Virtual register should fail") {
-    ThreeOperandInst inst{Opcode::ADD, DataSize::X, VirtualRegister{42},
-                          Register::X1, Register::X2};
-    Instruction instruction{inst};
-
-    REQUIRE_THROWS_AS(encoder.encodeInstruction(instruction),
-                      std::runtime_error);
+    REQUIRE_THROWS_AS(
+        encode({ThreeOperandInst{Opcode::ADD, DataSize::X, VirtualRegister{42},
+                                 Register::X1, Register::X2}}),
+        std::runtime_error);
   }
 }

@@ -138,12 +138,10 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
           result.insert(result.end(), constInsts.begin(), constInsts.end());
 
           arm64::Instruction ret;
-          ret.kind = arm64::TwoOperandInst{
-              arm64::Opcode::RET, arm64::DataSize::X,
-              arm64::Register::X30, // Link register
-              arm64::Immediate{0}
-              // Unused immediate for structure compatibility
-          };
+          ret.kind =
+              arm64::TwoOperandInst{arm64::Opcode::RET, arm64::DataSize::X,
+                                    arm64::Register::X30, // Link register
+                                    arm64::Register::X30};
           result.push_back(ret);
         } else if constexpr (std::is_same_v<T, ir::CondBranch>) {
           auto condBranchInsts = selectCondBranch(termKind);
@@ -170,12 +168,10 @@ InstructionSelector::selectTerminator(const ir::Terminator &term) {
 
           // Finally emit the RET itself
           arm64::Instruction ret;
-          ret.kind = arm64::TwoOperandInst{
-              arm64::Opcode::RET, arm64::DataSize::X,
-              arm64::Register::X30, // Link register
-              arm64::Immediate{0}
-              // Unused immediate for structure compatibility
-          };
+          ret.kind =
+              arm64::TwoOperandInst{arm64::Opcode::RET, arm64::DataSize::X,
+                                    arm64::Register::X30, // Link register
+                                    arm64::Register::X30};
           result.push_back(ret);
         }
       },
@@ -230,11 +226,9 @@ InstructionSelector::selectCondBranch(const ir::CondBranch &condBranch) {
   result.push_back(movTarget);
 
   arm64::Instruction ret;
-  ret.kind = arm64::TwoOperandInst{
-      arm64::Opcode::RET, arm64::DataSize::X,
-      arm64::Register::X30, // Link register
-      arm64::Immediate{0}   // Unused immediate for structure compatibility
-  };
+  ret.kind = arm64::TwoOperandInst{arm64::Opcode::RET, arm64::DataSize::X,
+                                   arm64::Register::X30, // Link register
+                                   arm64::Register::X30};
   result.push_back(ret);
 
   return result;

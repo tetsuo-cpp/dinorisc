@@ -61,7 +61,8 @@ int32_t Decoder::signExtend(uint32_t value, int bits) const {
   return static_cast<int32_t>(value);
 }
 
-Instruction::Opcode Decoder::determineOpcode(const DecodedFields &fields) const {
+Instruction::Opcode
+Decoder::determineOpcode(const DecodedFields &fields) const {
   switch (fields.opcode) {
   case 0x33: // OP
     switch (fields.funct3) {

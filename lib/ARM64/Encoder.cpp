@@ -1,7 +1,6 @@
 #include "Encoder.h"
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <stdexcept>
 #include <variant>
 
@@ -50,10 +49,9 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       // ADD (immediate): sf 0 0 1 0 0 0 1 0 sh imm12 Rn Rd
       // sf=bit31, bits30-29=00, bits28-23=100010, sh=bit22, imm12=bits21-10,
       // Rn=bits9-5, Rd=bits4-0
-      uint64_t immValue = std::get<Immediate>(inst.src2).value;
-      if (!isValidImmediate(immValue, 12))
+      uint32_t imm = std::get<Immediate>(inst.src2).value;
+      if (imm > 0xFFF)
         throw std::runtime_error("ADD immediate value too large (>12 bits)");
-      uint32_t imm = encodeImmediate(inst.src2, 12);
       uint32_t sh = 0; // No shift for simple immediate
       encoded = (sf << 31) | (0b00100010 << 23) | (sh << 22) | (imm << 10) |
                 (rn << 5) | rd;
@@ -74,10 +72,9 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       // SUB (immediate): sf 1 0 1 0 0 0 1 0 sh imm12 Rn Rd
       // sf=bit31, bits30-29=10, bits28-23=100010, sh=bit22, imm12=bits21-10,
       // Rn=bits9-5, Rd=bits4-0
-      uint64_t immValue = std::get<Immediate>(inst.src2).value;
-      if (!isValidImmediate(immValue, 12))
+      uint32_t imm = std::get<Immediate>(inst.src2).value;
+      if (imm > 0xFFF)
         throw std::runtime_error("SUB immediate value too large (>12 bits)");
-      uint32_t imm = encodeImmediate(inst.src2, 12);
       uint32_t sh = 0; // No shift for simple immediate
       encoded = (sf << 31) | (0b10100010 << 23) | (sh << 22) | (imm << 10) |
                 (rn << 5) | rd;
@@ -154,10 +151,9 @@ uint32_t Encoder::encodeThreeOperandInst(const ThreeOperandInst &inst) {
       // This is SUBS with Rt=XZR (compare is subtract with result discarded)
       // sf=bit31, bits30-29=11, bits28-23=100010, sh=bit22, imm12=bits21-10,
       // Rn=bits9-5, Rt=bits4-0 (Rt=31 for XZR)
-      uint64_t immValue = std::get<Immediate>(inst.src2).value;
-      if (!isValidImmediate(immValue, 12))
+      uint32_t imm = std::get<Immediate>(inst.src2).value;
+      if (imm > 0xFFF)
         throw std::runtime_error("CMP immediate value too large (>12 bits)");
-      uint32_t imm = encodeImmediate(inst.src2, 12);
       uint32_t sh = 0;   // No shift for simple immediate
       uint32_t xzr = 31; // XZR register
       encoded = (sf << 31) | (0b11100010 << 23) | (sh << 22) | (imm << 10) |
@@ -280,8 +276,6 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     break;
   }
   case Opcode::SXTB: {
-    if (isImmediate(inst.src))
-      throw std::runtime_error("SXTB with immediate not supported");
     // SXTB is alias of SBFM: sf 0 0 1 0 0 1 1 N immr imms Rn Rd
     // sf=bit31, bits30-29=00, bits28-23=100110, N=bit22, immr=bits21-16=000000,
     // imms=bits15-10=000111, Rn=bits9-5, Rd=bits4-0
@@ -294,8 +288,6 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     break;
   }
   case Opcode::SXTH: {
-    if (isImmediate(inst.src))
-      throw std::runtime_error("SXTH with immediate not supported");
     // SXTH is alias of SBFM: sf 0 0 1 0 0 1 1 N immr imms Rn Rd
     // sf=bit31, bits30-23=00100110, N=bit22, immr=bits21-16=000000,
     // imms=bits15-10=001111, Rn=bits9-5, Rd=bits4-0
@@ -308,8 +300,6 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     break;
   }
   case Opcode::SXTW: {
-    if (isImmediate(inst.src))
-      throw std::runtime_error("SXTW with immediate not supported");
     // SXTW is alias of SBFM: 1 0 0 1 0 0 1 1 1 immr imms Rn Rd (64-bit only)
     // sf=bit31=1, bits30-23=00100110, N=bit22=1, immr=bits21-16=000000,
     // imms=bits15-10=011111, Rn=bits9-5, Rd=bits4-0
@@ -322,12 +312,8 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     break;
   }
   case Opcode::RET: {
-    if (isImmediate(inst.src)) {
-      encoded = 0xD65F03C0;
-    } else {
-      uint32_t rn = encodeRegister(inst.src);
-      encoded = 0xD6400000 | (rn << 5);
-    }
+    uint32_t rn = encodeRegister(inst.src);
+    encoded = 0xD65F0000 | (rn << 5);
     break;
   }
   case Opcode::MOVN: {
@@ -352,10 +338,9 @@ uint32_t Encoder::encodeTwoOperandInst(const TwoOperandInst &inst) {
     if (isImmediate(inst.src)) {
       // CMP (immediate): sf 1 1 1 0 0 0 1 0 sh imm12 Rn Rt
       // This is SUBS with Rt=XZR (compare is subtract with result discarded)
-      uint64_t immValue = std::get<Immediate>(inst.src).value;
-      if (!isValidImmediate(immValue, 12))
+      uint32_t imm = std::get<Immediate>(inst.src).value;
+      if (imm > 0xFFF)
         throw std::runtime_error("CMP immediate value too large (>12 bits)");
-      uint32_t imm = encodeImmediate(inst.src, 12);
       uint32_t sh = 0;   // No shift for simple immediate
       uint32_t xzr = 31; // XZR register
       encoded = (sf << 31) | (0b11100010 << 23) | (sh << 22) | (imm << 10) |
@@ -540,22 +525,8 @@ uint32_t Encoder::encodeRegister(const Operand &operand) {
   throw std::runtime_error("Invalid operand type for register encoding");
 }
 
-uint32_t Encoder::encodeImmediate(const Operand &operand, uint8_t bitWidth) {
-  if (std::holds_alternative<Immediate>(operand)) {
-    uint64_t value = std::get<Immediate>(operand).value;
-    uint64_t mask = (1ULL << bitWidth) - 1;
-    return static_cast<uint32_t>(value & mask);
-  }
-  return 0;
-}
-
 bool Encoder::isImmediate(const Operand &operand) {
   return std::holds_alternative<Immediate>(operand);
-}
-
-bool Encoder::isValidImmediate(uint64_t value, uint8_t bitWidth) {
-  uint64_t maxValue = (1ULL << bitWidth) - 1;
-  return value <= maxValue;
 }
 
 uint32_t Encoder::getSfBit(DataSize size) {
@@ -577,7 +548,7 @@ uint32_t Encoder::getConditionCode(Opcode opcode) {
   case Opcode::B_GE:
     return 0b1010;
   default:
-    return 0b0000;
+    throw std::runtime_error("Unsupported condition code opcode");
   }
 }
 

@@ -21,9 +21,7 @@ private:
   uint32_t encodeConditionalSelectInst(const ConditionalSelectInst &inst);
 
   uint32_t encodeRegister(const Operand &operand);
-  uint32_t encodeImmediate(const Operand &operand, uint8_t bitWidth);
   bool isImmediate(const Operand &operand);
-  bool isValidImmediate(uint64_t value, uint8_t bitWidth);
 
   uint32_t getSfBit(DataSize size);
   uint32_t getConditionCode(Opcode opcode);

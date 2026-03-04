@@ -71,7 +71,6 @@ std::string registerToString(Register reg) {
   case Register::XSP:
     return "sp";
   }
-  return "unknown";
 }
 
 std::string opcodeToString(Opcode opcode) {
@@ -143,7 +142,6 @@ std::string opcodeToString(Opcode opcode) {
   case Opcode::RET:
     return "ret";
   }
-  return "unknown";
 }
 
 std::string dataSizeToString(DataSize size) {
@@ -157,7 +155,6 @@ std::string dataSizeToString(DataSize size) {
   case DataSize::X:
     return "x";
   }
-  return "unknown";
 }
 
 static std::string operandToString(const Operand &operand) {
@@ -254,7 +251,6 @@ std::string conditionToString(Condition condition) {
   case Condition::NV:
     return "nv";
   }
-  return "unknown";
 }
 
 } // namespace arm64
